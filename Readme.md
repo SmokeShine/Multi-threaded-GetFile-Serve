@@ -53,7 +53,7 @@ development is a standard technique for softare, including systems software.
 The auto-grader is a _grader_ and not a test suite.
 
 Note: your project readme file (10% of your grade for Project 1) is submitted on
-**Canvas** in either markdown or PDF format.
+**Canvas** in PDF format.
 
 ### We do not use the "activate" feature
 
@@ -347,13 +347,13 @@ continue to run.  Once the boss confirms all requests have been completed,
 it should terminate the worker threads and exit.  We will be looking for
 your code to use a work queue (from `steque.[ch]`), at least one
 mutex (`pthread_mutex_t`), and at least one condition variable (`pthread_cond_t`)
-to coordinate these activities. Bonnie will confirm that your implementation
+to coordinate these activities. Gradescope will confirm that your implementation
 meets these requirements.
 
 The folder mtgf includes both source and object files The object
 files gfclient.o and gfserver.o may be used in-place of your own
 implementations.  Source code is not provided because these files implement
-the protocol for Part 1.  Note: these are the binary files used by Bonnie.
+the protocol for Part 1.  Note: these are the binary files used by Gradescope.
 They are known *not to work* on Ubuntu versions other than 18.04.  They are
 64 bit binaries (only).  If you are working on other platforms, you should
 be able to use your protocol implementation files from Part 1.
