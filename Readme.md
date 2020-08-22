@@ -49,7 +49,7 @@ and the final due date; you may use them all within one day, or you may use
 one per day - the choice is yours.
 
 We strongly encourage you to think about testing your own code.  Test driven
-development is a standard technique for softare, including systems software.
+development is a standard technique for software, including systems software.
 The auto-grader is a _grader_ and not a test suite.
 
 Note: your project readme file (10% of your grade for Project 1) is submitted on
@@ -61,7 +61,7 @@ Gradescope includes an "activate" feature that purportedly tells you which versi
 of your code you want us to grade; **we do not use this feature**.  We always grade
 your last submission prior to the deadline.  This is due to the nature of our
 assignments, which can have race conditions; allowing you to run the same code 10
-times and pick the one one that worked is antithetical to our learning objectives.
+times and pick the one that worked is antithetical to our learning objectives.
 Thus, we use your last submission.  Plan accordingly.
 
 ## README
@@ -102,6 +102,10 @@ from the server.  Any missing or additional output causes the test to fail.
 Your echoserver should not terminate after sending its first response; rather,
 it should prepare to serve another request.  You may consult the references suggested
 in this document or others on the internet.
+
+Your programs should support both IPv4 and IPv6; in other words implement an IP 
+agnostic server and client. We have tests in subsequent parts to test support 
+for IPv4 and IPv6.
 
 Once you have completed your programs inside the echo directory, you upload it
 to Gradescope (which you can find from Canvas).
@@ -170,8 +174,7 @@ establishes a connection and closes the socket when finished.
 
 You may consult the references suggested in this document or others on the
 internet. Starter code is provided inside of the transfer directory.  Once you
-have completed your programs inside this directory, you may submit it with the
-command
+have completed your programs inside this directory, you may upload it to Gradescope.
 
 Your server should not stop after a single transfer, but should continue accepting
 and transferring files to other clients.  Your client should terminate after
@@ -246,7 +249,7 @@ directory.  It contains the files
 
 * Makefile - (do not modify) used for compiling the project components
 * content.[ch] - (do not modify) a library that abstracts away the task of
-  fetching content         from disk.
+  fetching content from disk.
 * content.txt - (modify to help test) a data file for the content library
 * gfclient.c - (modify and submit) implementation of the gfclient interface.
 * gfclient.h - (do not modify) header file for the gfclient library
@@ -350,7 +353,7 @@ mutex (`pthread_mutex_t`), and at least one condition variable (`pthread_cond_t`
 to coordinate these activities. Gradescope will confirm that your implementation
 meets these requirements.
 
-The folder mtgf includes both source and object files The object
+The folder mtgf includes both source and object files. The object
 files gfclient.o and gfserver.o may be used in-place of your own
 implementations.  Source code is not provided because these files implement
 the protocol for Part 1.  Note: these are the binary files used by Gradescope.
@@ -360,7 +363,7 @@ be able to use your protocol implementation files from Part 1.
 
 * Makefile - (do not modify) used for compiling the project components
 * content.[ch] - (do not modify) a library that abstracts away the task of
-  fetching content         from disk.
+  fetching content from disk.
 * content.txt - (modify to help test) a data file for the content library
 * gfclient.o - (do not modify) implementation of the gfclient interface.
 * gfclient.h - (do not modify) header file for the gfclient library
@@ -441,6 +444,20 @@ Finally, we encourage you to make concrete suggestions on how you would improve 
   * Echo Client-Server (10 points)
   * Transfer (10 points)
 
+Your submission should compile and build without any errors on gradescope. 
+
+For echo client-server: Your client program will be tested to make sure it 
+correctly prints the message that was received from the server and your 
+server will be tested to make sure it correctly echoes the message sent 
+by the client. Note your submission may fail tests if it prints or echoes 
+any additional characters (including formatting options such as newline 
+characters.)
+
+For transfer: Your client should successfully save the file sent from the 
+sever on the disk and the server should accurately send the file to the client. 
+File size and contents on the client should match the file size and contents on  
+the server side.
+
 * Part 1: Getfile Libraries (30 points)
   * Client (15 points)
   * Server(15 points)
@@ -451,6 +468,20 @@ use of sockets - including the ability to restart your server implementation
 using the same port. Note that the automated tests will test _some_ of these
 automatically, but graders may execute additional tests of these requirements.
 
+Our tests include malformed requests such as invalid scheme (eg: PULLFILE), 
+invalid method (eg: FETCH) and invalid path (eg: foo); requests for files 
+that are not on the server as well as scenarios where the server is unable to 
+process the client request. Likewise, our tests include valid requests that 
+may result in a single message from the server (ie a single message with both 
+the response header and data in the same message) or multiple messages from 
+the server (response header or data sent in multiple messages, message size 
+may or may not vary). 
+
+In addition to the above tests , we also run some sanity tests to ensure your 
+submission compiles & builds without any errors on gradescope and proper 
+initialization & cleanup is performed (eg: no memory leaks and no invalid 
+memory accesses). 
+
 * Part 2: Multithreading (40 points)
   * Client (20 points)
   * Server(20 points)
@@ -460,6 +491,11 @@ deadlock, number of threads can be varied, concurrent execution of threads,
 files fully transmitted, correct use of locks to access shared state, no race
 conditions, etc. Note that the automated tests will test _some_ of these
 automatically, but graders may execute additional tests of these requirements.
+
+In addition to the sanity tests discussed in part 1, our tests will validate 
+if your submission supports multiple file downloads of varying file sizes 
+concurrently. Your implementation employs boss worker model to distribute work 
+and uses appropriate synchronization mechanisms to protect shared data.
 
 * README (10 points + 5 point extra credit opportunity)
   * Clearly demonstrates your understanding of what you did and why - we
