@@ -1,0 +1,200 @@
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <netdb.h>
+#include <getopt.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <sys/types.h>
+
+char *message = "Hello World!!";
+
+/*Error handlers for socket connections*/
+void error(const char *msg)
+{
+    // Error function used for reporting issues
+    perror(msg);
+    exit(0);
+}
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <assert.h>
+#include <limits.h>
+#include <ftw.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <netdb.h>
+#include <sys/sendfile.h>
+
+
+#define BUFSIZE 820
+
+#define USAGE                                                  \
+    "usage:\n"                                                 \
+    "  transferclient [options]\n"                             \
+    "options:\n"                                               \
+    "  -s                  Server (Default: localhost)\n"      \
+    "  -p                  Port (Default: 20801)\n"            \
+    "  -o                  Output file (Default cs6200.txt)\n" \
+    "  -h                  Show this help message\n"
+
+/* OPTIONS DESCRIPTOR ====================================================== */
+static struct option gLongOptions[] = {
+    {"server", required_argument, NULL, 's'},
+    {"port", required_argument, NULL, 'p'},
+    {"output", required_argument, NULL, 'o'},
+    {"help", no_argument, NULL, 'h'},
+    {NULL, 0, NULL, 0}};
+
+/* Main ========================================================= */
+int main(int argc, char **argv)
+{
+    int option_char = 0;
+    char *hostname = "localhost";
+    unsigned short portno = 20801;
+    // char *filename = "cs6200.txt";
+    char *filename = "test.txt";
+    // truncate -s 10M output.file
+    setbuf(stdout, NULL);
+
+    // Parse and set command line arguments
+    while ((option_char = getopt_long(argc, argv, "s:xp:o:h", gLongOptions, NULL)) != -1)
+    {
+        switch (option_char)
+        {
+        case 's': // server
+            hostname = optarg;
+            break;
+        case 'p': // listen-port
+            portno = atoi(optarg);
+            break;
+        default:
+            fprintf(stderr, "%s", USAGE);
+            exit(1);
+        case 'o': // filename
+            filename = optarg;
+            break;
+        case 'h': // help
+            fprintf(stdout, "%s", USAGE);
+            exit(0);
+            break;
+        }
+    }
+
+    if (NULL == hostname)
+    {
+        fprintf(stderr, "%s @ %d: invalid host name\n", __FILE__, __LINE__);
+        exit(1);
+    }
+
+    if (NULL == filename)
+    {
+        fprintf(stderr, "%s @ %d: invalid filename\n", __FILE__, __LINE__);
+        exit(1);
+    }
+
+    if ((portno < 1025) || (portno > 65535))
+    {
+        fprintf(stderr, "%s @ %d: invalid port number (%d)\n", __FILE__, __LINE__, portno);
+        exit(1);
+    }
+
+    /* Socket Code Here */
+    int socketFD, portNumber, charsWritten;
+    struct sockaddr_in serverAddress;
+    struct hostent *serverHostInfo;
+    // Set up the server address struct
+    memset((char *)&serverAddress, '\0', sizeof(serverAddress)); // Clear out the address struct
+    // portNumber = atoi(argv[2]); // Get the port number, convert to an integer from a string
+    portNumber = portno;                         // Get the port number, convert to an integer from a string
+    serverAddress.sin_family = AF_INET;          // Create a network-capable socket
+    serverAddress.sin_port = htons(portNumber);  // Store the port number
+    serverHostInfo = gethostbyname("localhost"); // Convert the machine name into a special form of address
+    // if (serverHostInfo == NULL)
+    // {
+    //     fprintf(stderr, "CLIENT: ERROR, no such host\n");
+    //     exit(0);
+    // }
+    // memcpy((char *)&serverAddress.sin_addr.s_addr, (char *)serverHostInfo->h_addr, serverHostInfo->h_length); // Copy in the address
+
+    // Set up the socket
+    // socketFD = socket(AF_INET, SOCK_STREAM, 0); // Create the socket
+    // if (socketFD < 0)
+    //     error("CLIENT: ERROR opening socket");
+
+    // Connect to server
+    // if (connect(socketFD, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) // Connect socket to address
+    //     error("CLIENT: ERROR connecting");
+
+    // Get input message from user
+    // printf("CLIENT: Enter text to send to the server, and then hit enter: ");
+    // memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
+    // fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
+    // buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+
+    // Send message to server
+    // 	charsWritten = send(socketFD, message, strlen(message), 0); // Write to the server
+    // 	if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
+    // 	if (charsWritten < strlen(message)) printf("CLIENT: WARNING: Not all data written to socket!\n");
+
+    //   char buffer[256];
+    //   int  charsRead=-1;
+    //   memset(buffer,'\0',256);
+    // 	charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
+    // 	if (charsRead < 0) error("CLIENT: ERROR reading from socket");
+    // 	printf("%s", buffer);
+
+    // /* Step 6: Know the filesize of encrypted file*/
+    struct stat file_stat;
+    int fd;
+    char file_size[512];
+    int remain_data=-1;
+    ssize_t len;
+    fd = open(filename, O_RDONLY);
+    if (fd == -1)
+    {
+        fprintf(stderr, "Error opening file --> %s", strerror(errno));
+
+        exit(EXIT_FAILURE);
+    }
+
+    /* Get file stats */
+
+    if (fstat(fd, &file_stat) < 0)
+    {
+        fprintf(stderr, "Error fstat --> %s", strerror(errno));
+
+        exit(EXIT_FAILURE);
+    }
+    remain_data=file_stat.st_size;
+    printf("%d---------\n",remain_data);
+    return 0;
+    // /* Sending file data */
+    // int sent_bytes = 0;
+    // while (remain_data > 0)
+    // {
+    //     sent_bytes = send(establishedConnectionFD, ciphertext, strlen(ciphertext), 0);
+
+    //     if (sent_bytes > 0)
+    //     {
+    //         remain_data -= sent_bytes;
+    //     }
+    // }
+    // close(socketFD); // Close the socket
+    // return 0;
+}
