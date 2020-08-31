@@ -148,28 +148,28 @@ int gfc_perform(gfcrequest_t **gfr){
         freeaddrinfo(servinfo);
         return 2;
     }
-   printf("******%s ******\n\n %s  \n\n",PORT,(*(*gfr)).server);
+//    printf("******%s ******\n\n %s  \n\n",PORT,(*(*gfr)).server);
 
-     char s[INET6_ADDRSTRLEN];
+    //  char s[INET6_ADDRSTRLEN];
 
-    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
-            s, sizeof s);
-    printf("%s---",s);
-    printf("%d---",p->ai_family);
+    // inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
+    //         s, sizeof s);
+    // printf("%s---",s);
+    // printf("%d---",p->ai_family);
 
     freeaddrinfo(servinfo); // all done with this structure
     
     // Create the request string to be send to the server
     char message[BUFSIZ];
     memset(message,'\0',BUFSIZ);
-    sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path,"\r\n\r\nPLACEHOLDER");
-    printf("Message is %s-----------\n",message);
+    sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path,"\r\n\r\n");
+    // printf("Message is %s-----------\n",message);
     int charsRead=-1; 
     charsRead = send(socketFD, message, strlen(message), 0); // Send success back
     if (charsRead < 0)
       error("ERROR writing to socket");
     
-
+    
     // Start Receiving the data
     // may or may not contain header
     // <scheme> <status> <length>\r\n\r\n<content>
@@ -178,8 +178,10 @@ int gfc_perform(gfcrequest_t **gfr){
     // fixed size request
     // convert to ascii? lol
 
-    char completeMessage[512], readBuffer[128];
-    memset(completeMessage, '\0', 512);
+    char completeMessage[2048];
+    char *readBuffer;
+    readBuffer=malloc(128);
+    memset(completeMessage, '\0', 2048);
     memset(readBuffer, '\0', 128); // Clear the buffer
 
     // you are receiving bytes because of void - it is still a string without \0
@@ -187,25 +189,90 @@ int gfc_perform(gfcrequest_t **gfr){
     // check beej guide
     //Brute Force - Check for end of header flag. Block transfer data till then. 
     // After finding the header flag, check back for format
+    
     int r=-1;
+    // <scheme> <status> <length>\r\n\r\n<content>
+    int total=0;
     while (strstr(completeMessage, "\r\n\r\n") == NULL) // As long as we haven't found the terminal...
     {
-        memset(readBuffer, '\0', sizeof(readBuffer)); // Clear the buffer
-        r = recv(socketFD, readBuffer, sizeof(readBuffer) - 1, 0); // Get the next chunk
+        memset(readBuffer, '\0', 128); // Clear the buffer
+        r = recv(socketFD, (void*)readBuffer, 127, 0); // Get the next chunk
         strcat(completeMessage, readBuffer); // Add that chunk to what we have so far
-        // printf("PARENT: Message received from child: \"%s\", total: \"%s\"\n", readBuffer, completeMessage);
-        if (r == -1) { printf("r == -1\n"); break; } // Check for errors
-        if (r == 0) { break; }
+        total=total+r;
+        // printf("PARENT: Message received from Server: \"%s\", total: \"%s\"\n", readBuffer, completeMessage);
+        // if (r == -1) { printf("r == -1\n"); break; } // Check for errors
+        // if (r == 0) { break; }
+        // printf("Bytes Received From Handler - %d\n",r);
+        // printf("%s\n", readBuffer);       
     }
+    
+    // Check for getfile string format
     //buffer may still have some data
+    char sscheme[128];
+    char sstatus[128];
+    char placeholderint[128];
+    int filelength=-1;
+    // char g[128];
+    sscanf(completeMessage, "%s %s %s\r\n\r\n" , sscheme,sstatus,placeholderint);
+    filelength=atoi(placeholderint);
+    printf("Total Received from header is %d\n",total);
+    printf("Header is %ld\n",strlen(sscheme)+strlen(sstatus)+strlen(placeholderint));
+    // Create a clean header string
+    // char header[1024];
+    // sprintf(header, "%s %s %d\r\n\r\n", sscheme,sstatus,filelength);
+
+    // printf("1)+++%s+++++++\n",completeMessage);
+    // char *temp = strstr(completeMessage, "\r\n\r\n" );
+    // if ( temp != NULL )
+    // { 
+    //     temp += 4;
+    // }
+    char *data;
+    data=malloc(filelength);
+    memset(data,'\0',filelength); //no null termination if complete data is filled correctly
+    int bytesreceived=total-strlen(sscheme)-strlen(sstatus)-strlen(placeholderint)-4-2;
+
+    // memcpy(data, &completeMessage+strlen(sscheme)+strlen(sstatus)+strlen(placeholderint)+4, bytesreceived);
+    printf("%ld--%s\n",strlen(sscheme),sscheme);
+    printf("%ld--%s\n",strlen(sstatus),sstatus);
+    printf("%ld--%s\n",strlen(placeholderint),placeholderint);
+    printf("%ld--\n",strlen(completeMessage));
+    printf("%ld header+%d data\n",strlen(sscheme)+strlen(sstatus)+strlen(placeholderint)+4+2,bytesreceived);
+    // read till you dont receive any data anymore
+    
+
+    memset(readBuffer, '\0', 128); // Clear the buffer
+    // bytesreceived=0;
+    while (bytesreceived!=filelength) 
+    {     
+        r = recv(socketFD, readBuffer, 128 , 0);   
+        if (r>0)
+        {
+            bytesreceived=bytesreceived+r;
+            // printf(" Bytes Received=%d\n",bytesreceived);
+            memset(readBuffer, '\0', 128); // Clear the buffer
+        }
+        else
+        {
+            break;
+        }
+        
+    }    
+    // free(readBuffer);
+    // free(data);
 
         // memcopy, then check for header end - how to loop?
         // there is length field - but in bytes. how to check if response is getfile get again?
     //second parameter is size. third parameter is a function 
     //leap of faith. match with writecb - nonsense - what happens to the bytes read?
-    // (*gfr)->writefunc((void *)NULL ,NULL , (*gfr)->writearg);
-
+    
+    // Disable writing till you cant read the header
+    // (*gfr)->writefunc((void *)data ,bytes , (*gfr)->writearg);
+    
     close(socketFD);
+    free(readBuffer);
+    free(data);
+    printf("\n%d %d\n",bytesreceived,filelength);
     (*(*gfr)).status=GF_OK;//if file is sent from the server
     return 0;
 }

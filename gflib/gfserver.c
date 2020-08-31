@@ -18,13 +18,14 @@ struct gfserver_t
 
 struct gfcontext_t
 {
+    int establishedConnectionFD;
 };
 
 //Take ctx and abort something
 void gfs_abort(gfcontext_t **ctx)
 {
     //one more non sense
-
+    close((*ctx)->establishedConnectionFD);
 }
 
 /*Error handlers for socket connections*/
@@ -47,12 +48,30 @@ gfserver_t *gfserver_create()
 
 ssize_t gfs_send(gfcontext_t **ctx, const void *data, size_t len)
 {
-    return -1;
+    // This sends data - so I send data 
+    // does this need to go in loop? what if len is larger than buffer - check will small file. can't help
+    // will do error check later
+    // I don't have test cases - painful error checking
+	ssize_t bytessent = send((*ctx)->establishedConnectionFD, (void*)data, len, 0);
+	return bytessent;
 }
 
 ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
 {
-    return -1;
+    // this sends header and file?
+    // sending file is an act of GOD
+    // ctx looks to be accept socket instead of listening socket
+    // looks like i have a socket and file length.. where is the data? 
+    // do i need to use send and then return the value returned from gfs_send.. could be possible
+    // talk about code redundancy.. I can't call gfs_send.. it is for data.. not header data 
+    // is this handler nonsense?
+    // this is giving ? without this, I may directly receive the file
+    
+    // Header Format - GETFILE OK length of the file. status is ok.
+    // Hard code and send
+    char header[512]="GETFILE OK 138177\r\n\r\n";
+    printf("Header is -->%s--",header);
+    return send((*ctx)->establishedConnectionFD,(void*)header,strlen(header),0);
 }
 
 void gfserver_serve(gfserver_t **gfs)
@@ -119,7 +138,16 @@ void gfserver_serve(gfserver_t **gfs)
         // Accept a connection, blocking if one is not available until one connects
         sin_size = sizeof their_addr;
         establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&their_addr, &sin_size);
-
+        //unfortunately, this simple piece of stack pointer needs to go in heap so we can play hide and seek 
+        // unfortunately again, as expected from this project, I have gfs and not gfc
+        // does this mean, gfc originates here.. it this the starting of the knot..
+        // it has to be, gfc is not passed around as parameter
+        gfcontext_t *gfc=(gfcontext_t *)malloc(sizeof(gfcontext_t)); //what a waste of precious memory
+        gfc->establishedConnectionFD=establishedConnectionFD;
+        // I have the variable, why should i use pointer to send file
+        // I won't
+        // I want to kill myself.. handler uses gfc.. what does this bs handler really do?
+        // activate sendfile?       
         if (establishedConnectionFD < 0)
             error("ERROR on accept");
 
@@ -162,36 +190,27 @@ void gfserver_serve(gfserver_t **gfs)
         char path[1024];
         memset(path,'\0',1024);
 
-        sscanf(completeMessage, "%s %s %s" , sscheme,mmethod,path);
+        sscanf(completeMessage, "%s %s %s\r\n\r\n" , sscheme,mmethod,path);
         if (((strcmp(sscheme,scheme)!=0) || (strcmp(sscheme,scheme)!=0))!=0)
         {
             printf("Format error for scheme and method\n");
             // Add error statement
         }
-        printf("Path is %s\n",path);
-        //Check if path exists
-        FILE *fptr;
-        strcpy(path,"../Prateek.pdf");
-        printf("%s\n",path);
-        fptr = fopen(path, "r");
-        if (fptr == NULL)
-        {
-            printf("No file to read\n");
-        }
-        printf("++++++++++++\n");
-        //send the file with header for file length    
-        // FILE *fd;
-        // fd = fopen("Prateek.pdf", "r");
-        // int sent_bytes = -1;
-        // int total_sent = 0;
-        // int bytesRead = -1;
-        // char buffer[128];
-        // memset(buffer, '\0', 128);
-        // while ((bytesRead = fread(buffer, 1, sizeof(buffer), fd)) > 0)
-        // {
-        //     sent_bytes = send(establishedConnectionFD, buffer, bytesRead, 0);
-        //     total_sent = sent_bytes + total_sent;
-        // }
+        printf("Path is %s\n",path); 
+        // this has \ in the path..what is the advantage of doing this?
+        // so I strip it off. what is there is no \ at the start..
+        // i dont trust this garbage code base, so i will do a check 
+        int filestartcheck=-1;
+        filestartcheck=strncmp(path,"/",1);   
+        printf("----File Start Check is %d------\n",filestartcheck);     
+
+        // by the act of GOD, this file should magically transfer to client
+        // the killing joke, what goes in third argument
+        // just like all beauties of life, this also has to be brute force testing
+        (*gfs)->handler(&gfc,"/courses/ud923/filecorpus/road.jpg",(*gfs)->handlerarg);
+        // (*gfs)->handler(&gfc,path,(*gfs)->handlerarg);
+        // printf(" DOOM IS ETERNAL\n\n");
+
         close(establishedConnectionFD); // Close the existing socket which is connected to the client
     }
 }
@@ -199,9 +218,9 @@ void gfserver_serve(gfserver_t **gfs)
 void gfserver_set_handlerarg(gfserver_t **gfs, void *arg)
 {
     //malloc
-     (*(*gfs)).headerarg= malloc(sizeof(arg));
+     (*(*gfs)).handlerarg= malloc(sizeof(arg));
     //memset to \0
-    memset((*(*gfs)).headerarg,'\0',sizeof(arg));
+    memset((*(*gfs)).handlerarg,'\0',sizeof(arg));
     (*(*gfs)).handlerarg=arg;
 }
 
