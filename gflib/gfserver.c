@@ -69,9 +69,28 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
     
     // Header Format - GETFILE OK length of the file. status is ok.
     // Hard code and send
-    char header[512]="GETFILE OK 138177\r\n\r\n";
-    printf("Header is -->%s--",header);
-    return send((*ctx)->establishedConnectionFD,(void*)header,strlen(header),0);
+    // char header[512]="GETFILE OK 138177\r\n\r\n";
+
+
+	char *scheme = "GETFILE";
+	char str_status[15] = "";
+	char *header = (char *)malloc(strlen(scheme) + sizeof(str_status) + 15 + 3);
+
+	if (status == GF_OK){
+		strcpy(str_status, "OK");
+		sprintf(header, "%s %s %zu\r\n\r\n", scheme, str_status, file_len);
+	}
+	else if (status == GF_FILE_NOT_FOUND){
+		strcpy(str_status, "FILE_NOT_FOUND");
+		sprintf(header, "%s %s \r\n\r\n", scheme, str_status);
+	}
+	else{
+		strcpy(str_status, "ERROR");
+		sprintf(header, "%s %s \r\n\r\n", scheme, str_status);
+	}
+
+	printf("Header = %s\n", header);
+	return send((*ctx)->establishedConnectionFD, (void*)header, strlen(header), 0);
 }
 
 void gfserver_serve(gfserver_t **gfs)
@@ -207,7 +226,7 @@ void gfserver_serve(gfserver_t **gfs)
         // by the act of GOD, this file should magically transfer to client
         // the killing joke, what goes in third argument
         // just like all beauties of life, this also has to be brute force testing
-        (*gfs)->handler(&gfc,"/courses/ud923/filecorpus/road.jpg",(*gfs)->handlerarg);
+        (*gfs)->handler(&gfc,path,(*gfs)->handlerarg);
         // (*gfs)->handler(&gfc,path,(*gfs)->handlerarg);
         // printf(" DOOM IS ETERNAL\n\n");
 
