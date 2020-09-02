@@ -31,7 +31,6 @@
     void (*headerfunc)(void*, size_t, void *);
     void (*writefunc)(void*, size_t, void *);
 
-    size_t file_size;
 };
 
 
@@ -55,10 +54,10 @@ void *get_in_addr(struct sockaddr *sa)
 
 // optional function for cleaup processing.
 void gfc_cleanup(gfcrequest_t **gfr){
-    free((*gfr)->server);
-    free((*gfr)->writearg);
-    free((*gfr)->req_path);
-    free(*gfr);
+	// free((*gfr)->headerarg);
+	free((*gfr)->req_path);
+	free((*gfr)->server);
+	free(*gfr);
 }
 
 gfcrequest_t *gfc_create(){
@@ -96,135 +95,6 @@ void gfc_global_init(){
 void gfc_global_cleanup(){
 }
 
-int gfc_performx(gfcrequest_t **gfr)
-{
-
-	int sockfd = 0; //socket file descriptor
-	// const char *line_ending = "\r\n\r\n";
-	// const char *line_beg = "GETFILE GET";
-	char header[1000] = "";
-	int bytes_read = 0;
-	int total_bytes_read = 0;
-	// int ret_scanf;
-	size_t file_size = 0;
-	char str_status[15];
-	char buffer[4096] ;
-    memset(buffer,'\0',4096);
-	char *p_buff = buffer;
-	int buff_size = 4096;
-	char *p_file_data = NULL;
-	int header_len = 0;
-	int bytes_wrote = 0;
-	int total_bytes_wrote = 0;
-	size_t data_remaining = 0;
-	int rnrn_flag = 0;
-	//Create request_str
-    char message[BUFSIZ];
-    memset(message,'\0',BUFSIZ);
-    sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path,"\r\n\r\n");
-
-    struct addrinfo hints, *servinfo, *p;
-    int rv;
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    char PORT[256];
-    sprintf(PORT, "%d", (*(*gfr)).port);
-    if ((rv = getaddrinfo((*(*gfr)).server, PORT, &hints, &servinfo)) != 0)
-    {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
-    }
-
-    // loop through all the results and connect to the first we can
-    for (p = servinfo; p != NULL; p = p->ai_next)
-    {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                               p->ai_protocol)) == -1)
-        {
-            perror("client: socket");
-            continue;
-        }
-
-        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
-        {
-            close(sockfd);
-            perror("client: connect");
-            continue;
-        }
-
-        break;
-    }
- 
-    if (p == NULL)
-    {
-        fprintf(stderr, "client: failed to connect\n");
-        freeaddrinfo(servinfo);
-        return 2;
-    }
-    freeaddrinfo(servinfo); // all done with this structure
-	send(sockfd, message, strlen(message), 0);
-
-	//get header and data
-	data_remaining = 1;
-	while (data_remaining != 0)
-	{
-		buff_size = 4096;
-		p_buff = buffer;
-		bytes_read = 0;
-		int init_bytes_read = 0;
-		while (1)
-		{
-			//bytes_read = recv(sockfd, (void *)p_buff, buff_size,0);
-			bytes_read = recv(sockfd, (void *)p_buff, 4096, 0);
-			bytes_wrote = bytes_read;
-			init_bytes_read += bytes_read;
-			p_file_data = buffer;
-			if (rnrn_flag == 1)
-			{
-				break;
-			}
-			else if (strstr(buffer, "\r\n\r\n") != NULL)
-			{
-				//found rnrn. Set flag
-				rnrn_flag = 1;
-				sscanf(buffer, "GETFILE %s %zu\r\n\r\n", str_status, &file_size);
-				printf("str status = %s, filzesize = %zu\n", str_status, file_size);
-				{
-					sprintf(header, "GETFILE %s %zu\r\n\r\n", str_status, file_size);
-					(*gfr)->status = GF_OK;
-					(*gfr)->file_size = file_size;
-					data_remaining = file_size;
-                    
-                        char sscheme[128];
-                        char sstatus[128];
-                        char placeholderint[128];
-                        
-                        // char g[128];
-                        sscanf(buffer, "%s %s %s\r\n\r\n" , sscheme,sstatus,placeholderint);
-
-                    // int message_length=strlen(sscheme)+strlen(sstatus)+strlen(placeholderint)+4+2;
-					header_len = strlen(sscheme)+strlen(sstatus)+strlen(placeholderint)+4+2;
-                    // header_len = strlen(header);
-					bytes_wrote = init_bytes_read - header_len;
-					p_file_data = buffer + header_len;
-				}
-				break;
-			}
-			buff_size -= bytes_read;
-			p_buff += bytes_read;
-		}
-            (*gfr)->bytesreceived += bytes_wrote;
-			total_bytes_read += bytes_read;
-			total_bytes_wrote += bytes_wrote;
-			data_remaining -= bytes_wrote;
-			
-			(*gfr)->writefunc((void *)p_file_data, bytes_wrote, (*gfr)->writearg);
-		
-	}
-	// free(request_str);
-	return 0;
-}
 
 int gfc_perform(gfcrequest_t **gfr){
     // currently not implemented.  You fill this part in.
@@ -279,7 +149,7 @@ int gfc_perform(gfcrequest_t **gfr){
     memset(message,'\0',BUFSIZ);
     sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path,"\r\n\r\n");
     // strcpy(message,"GETFILE GET /courses/ud923/filecorpus/TestFile.txt\r\n\r\n");
-    printf("Message is %s-----------\n",message);
+    printf("Message is %s\n",message);
     int charsRead=-1; 
     charsRead = send(socketFD, message, strlen(message), 0); // Send success back
     if (charsRead < 0)
@@ -287,20 +157,23 @@ int gfc_perform(gfcrequest_t **gfr){
     // Start Receiving the data
     // char completeMessage[2048];
     char *readBuffer;
-    readBuffer=malloc(128);
+    readBuffer=malloc(1024);
     // memset(completeMessage, '\0', 2048);
     // memset(readBuffer, '\0', 128); // Clear the buffer
     int r=-1;
     // <scheme> <status> <length>\r\n\r\n<content>
     int total=0;
-    // char *complete=readBuffer;
-    memset(readBuffer, '\0', 128); // Clear the buffer
-    while (strstr(readBuffer, "\r\n\r\n") == NULL) // As long as we haven't found the terminal...
+    
+    memset(readBuffer, '\0', 1024); // Clear the buffer
+
+    char *start=readBuffer;
+    while (strstr(start, "\r\n\r\n") == NULL) // As long as we haven't found the terminal...
     {
         r = recv(socketFD, (void*)readBuffer, 128, 0); // Get the next chunk
-        
+        readBuffer=readBuffer+r;
         total=total+r;
     }
+    
     printf("Total Length till now:%d\n",total);
     // Check for getfile string format
 
@@ -308,14 +181,16 @@ int gfc_perform(gfcrequest_t **gfr){
     char placeholderint[128];
     
     // char g[128];
-    sscanf(readBuffer, "GETFILE %s %s\r\n\r\n" , sstatus,placeholderint);
+    sscanf(start, "GETFILE %s %s\r\n\r\n" , sstatus,placeholderint);
     size_t filelength=atoi(placeholderint);
     char header[128];
     sprintf(header, "GETFILE %s %ld\r\n\r\n", sstatus, filelength);
     printf("%s\n",header);
     int header_length=strlen(header);
+    
+    // free(start);
     char *data;
-    data=readBuffer+header_length;
+    data=start+header_length;
     // data=malloc(filelength+message_length);
     // memset(data,'\0',filelength); //no null termination if complete data is filled correctly
     int bytesreceived=total-header_length;
@@ -342,21 +217,13 @@ int gfc_perform(gfcrequest_t **gfr){
             break;
         }
         
-    }    
-    printf("\n%d %ld\n",bytesreceived,filelength);
-    // free(readBuffer);
-    // free(data);
-    
-    free(readBuffer);
-    // free(data);
-    
+    }
+    free(start);
     close(socketFD);
     
-    
-    
     (*(*gfr)).status=GF_OK;//if file is sent from the server
-        printf(" I AM HERE <<<<<<<<>>>>>>>>>>>\n");
-
+    (*(*gfr)).bytesreceived=bytesreceived;
+    (*(*gfr)).filelen=filelength;
     return 0;
 }
 
@@ -396,7 +263,6 @@ void gfc_set_server(gfcrequest_t **gfr, const char* server){
 }
 
 void gfc_set_writearg(gfcrequest_t **gfr, void *writearg){
-    (*(*gfr)).writearg= malloc(sizeof(writearg)+1);
     (*(*gfr)).writearg=writearg;
 }
 

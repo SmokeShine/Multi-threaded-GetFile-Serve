@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   gfs = gfserver_create();
 
   /*Setting options*/
-  gfserver_set_handler(&gfs, gfs_handler); //this beautiful thing is going to do something which nobody wants to tell
+  gfserver_set_handler(&gfs, gfs_handler);
   gfserver_set_port(&gfs, port);
   gfserver_set_maxpending(&gfs, 801);
 

@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
   /*Making the requests...*/
   for (i = 0; i < nrequests; i++) {
     req_path = workload_get_path();
-
+    
     if (strlen(req_path) > 256) {
       fprintf(stderr, "Request path exceeded maximum of 256 characters\n.");
       exit(EXIT_FAILURE);
@@ -136,9 +136,9 @@ int main(int argc, char **argv) {
     gfc_set_port(&gfr, port);
     gfc_set_writefunc(&gfr, writecb);
     gfc_set_writearg(&gfr, file);
-  printf("File Name is %s \n",local_path);
+
     fprintf(stdout, "Requesting %s%s\n", server, req_path);
-    
+
     if (0 > (returncode = gfc_perform(&gfr))) {
       fprintf(stdout, "gfc_perform returned error %d\n", returncode);
       fclose(file);
@@ -158,6 +158,7 @@ int main(int argc, char **argv) {
             gfc_get_filelen(&gfr));
 
     gfc_cleanup(&gfr);
+    printf("**********************\n");
   }
 
   gfc_global_cleanup();
