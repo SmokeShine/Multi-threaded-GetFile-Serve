@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
   /*Making the requests...*/
   for (i = 0; i < nrequests; i++) {
     req_path = workload_get_path();
-    
+
     if (strlen(req_path) > 256) {
       fprintf(stderr, "Request path exceeded maximum of 256 characters\n.");
       exit(EXIT_FAILURE);
@@ -156,9 +156,7 @@ int main(int argc, char **argv) {
     fprintf(stdout, "Status: %s\n", gfc_strstatus(gfc_get_status(&gfr)));
     fprintf(stdout, "Received %zu of %zu bytes\n", gfc_get_bytesreceived(&gfr),
             gfc_get_filelen(&gfr));
-
     gfc_cleanup(&gfr);
-    printf("**********************\n");
   }
 
   gfc_global_cleanup();
