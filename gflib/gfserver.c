@@ -11,13 +11,13 @@ struct gfserver_t
     unsigned int max_npending;
     gfh_error_t (*handler)(gfcontext_t **, const char *, void *);
     void *handlerarg;
-    // gfcontext_t *request;
+    gfcontext_t *socket_context;
 };
 
 struct gfcontext_t
 {
     int establishedConnectionFD;
-    gfstatus_t status; //request has a status
+    gfstatus_t status;
     char path[1024];
 };
 
@@ -25,7 +25,6 @@ struct gfcontext_t
 void gfs_abort(gfcontext_t **ctx)
 {
     //one more non sense
-
     close((*ctx)->establishedConnectionFD);
     free((*ctx));
 }
@@ -57,7 +56,7 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
     printf("%d\n", (*ctx)->status);
     printf("%d\n", status);
     printf("%d\n", (*ctx)->establishedConnectionFD);
-    printf("%s\n", (*ctx)->path);
+    // printf("%s\n", (*ctx)->path);
     printf("***********\n");
 
     char *header = (char *)malloc(128);
@@ -157,10 +156,10 @@ void gfserver_serve(gfserver_t **gfs)
         // Accept a connection, blocking if one is not available until one connects
         sin_size = sizeof their_addr;
         establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&their_addr, &sin_size);
-        gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t));
-        // (*gfs)->request = gfc;
+        gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t)); //what a waste of precious memory
+        (*gfs)->socket_context = gfc;
         (*gfc).establishedConnectionFD = establishedConnectionFD;
-        // (*gfc).status=GF_INVALID;
+
         if (establishedConnectionFD < 0)
             error("ERROR on accept");
         char *readBuffer;
@@ -179,12 +178,12 @@ void gfserver_serve(gfserver_t **gfs)
             {
                 readBuffer = readBuffer + r;
                 total = total + r;
-                (*gfc).status = GF_OK;
+                gfc->status = GF_OK;
             }
             else
             {
                 perror("Error in receiving data\n");
-                (*gfc).status = GF_ERROR;
+                gfc->status = GF_ERROR;
                 gfs_abort(&gfc);
                 break;
             }
@@ -200,7 +199,7 @@ void gfserver_serve(gfserver_t **gfs)
         char completeMessage[1024];
         sscanf(start, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
         sprintf(completeMessage, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
-        printf("\n**********************\nComplete Message Received is %s\n", completeMessage);
+        printf("\n**********************\nComplete Message To be Send is %s\n", completeMessage);
         int send = 1;
         if (((strcmp(sscheme, "GETFILE") != 0) || (strcmp(mmethod, "GET") != 0)) != 0)
         {
