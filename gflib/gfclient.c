@@ -150,7 +150,10 @@ int gfc_perform(gfcrequest_t **gfr)
     freeaddrinfo(servinfo); // all done with this structure
     char message[BUFSIZ];
     memset(message, '\0', BUFSIZ);
+
+    // strcpy((*(*gfr)).req_path,"/delete");
     sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path, "\r\n\r\n");
+    
     printf("Message is %s\n", message);
     int charsRead = -1;
     charsRead = send(socketFD, message, strlen(message), 0); // Send File Request to Server
@@ -220,6 +223,7 @@ int gfc_perform(gfcrequest_t **gfr)
         close(socketFD);
         return 0;
     }
+    
    if (strcmp(sscheme, "GETFILE") != 0)
     {
         (*(*gfr)).status=GF_INVALID;

@@ -1,4 +1,3 @@
-
 #include "gfserver-student.h"
 
 /* 
@@ -9,21 +8,26 @@
 struct gfserver_t
 {
     unsigned int port;
-    int max_npending;
+    unsigned int max_npending;
     gfh_error_t (*handler)(gfcontext_t **, const char *, void *);
     void *handlerarg;
+    // gfcontext_t *request;
 };
 
 struct gfcontext_t
 {
     int establishedConnectionFD;
+    gfstatus_t status; //request has a status
+    char path[1024];
 };
 
 //Take ctx and abort something
 void gfs_abort(gfcontext_t **ctx)
 {
     //one more non sense
+
     close((*ctx)->establishedConnectionFD);
+    free((*ctx));
 }
 
 void error(const char *msg)
@@ -48,7 +52,16 @@ ssize_t gfs_send(gfcontext_t **ctx, const void *data, size_t len)
 
 ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
 {
+    printf("***********\n");
+
+    printf("%d\n", (*ctx)->status);
+    printf("%d\n", status);
+    printf("%d\n", (*ctx)->establishedConnectionFD);
+    printf("%s\n", (*ctx)->path);
+    printf("***********\n");
+
     char *header = (char *)malloc(128);
+
     if (status == GF_OK)
     {
         sprintf(header, "GETFILE OK %ld\r\n\r\n", file_len);
@@ -57,19 +70,27 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
     {
         strcpy(header, "GETFILE FILE_NOT_FOUND\r\n\r\n");
     }
+    else if (status == GF_INVALID)
+    {
+        strcpy(header, "GETFILE INVALID\r\n\r\n");
+    }
     else
     {
         strcpy(header, "GETFILE ERROR\r\n\r\n");
     }
 
-    // strcpy(header, "GETFILE FILE_NOT_FOUND\r\n\r\n");
-    // strcpy(header, "GETFILE ERROR\r\n\r\n");
-    // sprintf(header, "GETILEE OK %ld\r\n\r\n", file_len);
-
     printf("Sending header to the client: %s\n", header);
-    
-    // sleep(2);
-    return send((*ctx)->establishedConnectionFD, (void *)header, strlen(header), 0);;
+
+    int i = send((*ctx)->establishedConnectionFD, (void *)header, strlen(header), 0);
+
+    if (status != GF_OK)
+    {
+        
+        (*ctx)->status = GF_INVALID;
+        close((*ctx)->establishedConnectionFD);
+        return -1;
+    }
+    return i;
 }
 
 void gfserver_serve(gfserver_t **gfs)
@@ -136,50 +157,55 @@ void gfserver_serve(gfserver_t **gfs)
         // Accept a connection, blocking if one is not available until one connects
         sin_size = sizeof their_addr;
         establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&their_addr, &sin_size);
-        gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t)); //what a waste of precious memory
-        gfc->establishedConnectionFD = establishedConnectionFD;
+        gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t));
+        // (*gfs)->request = gfc;
+        (*gfc).establishedConnectionFD = establishedConnectionFD;
+        // (*gfc).status=GF_INVALID;
         if (establishedConnectionFD < 0)
             error("ERROR on accept");
-        char buffer[MAX_REQUEST_LEN];
+        char *readBuffer;
+        readBuffer = malloc(1024);
         int r = -1;
-        memset(buffer, '\0', MAX_REQUEST_LEN);
+        // <scheme> <status> <length>\r\n\r\n<content>
+        int total = 0;
 
-        char completeMessage[MAX_REQUEST_LEN], readBuffer[32];
-        memset(completeMessage, '\0', sizeof(completeMessage)); // Clear the buffer
-        while (strstr(completeMessage, "\r\n\r\n") == NULL)     // As long as we haven't found the terminal...
+        memset(readBuffer, '\0', 1024); // Clear the buffer
+
+        char *start = readBuffer;
+        while (strstr(start, "\r\n\r\n") == NULL) // As long as we haven't found the terminal...
         {
-            memset(readBuffer, '\0', sizeof(readBuffer));                             // Clear the buffer
-            r = recv(establishedConnectionFD, readBuffer, sizeof(readBuffer) - 1, 0); // Get the next chunk
-            strcat(completeMessage, readBuffer);                                      // Add that chunk to what we have so far
-            if (r == -1)
+            r = recv(establishedConnectionFD, (void *)readBuffer, 128, 0); // Get the next chunk
+            if (r > 0)
             {
-                printf("r == -1\n");
-                break;
-            } // Check for errors
-            if (r == 0)
+                readBuffer = readBuffer + r;
+                total = total + r;
+                (*gfc).status = GF_OK;
+            }
+            else
             {
+                perror("Error in receiving data\n");
+                (*gfc).status = GF_ERROR;
+                gfs_abort(&gfc);
                 break;
             }
         }
 
-        printf("Message received is %s\n", completeMessage);
-        char scheme[128], method[128];
-        memset(scheme, '\0', 128);
-        strcpy(scheme, "GETFILE");
-        memset(method, '\0', 128);
-        strcpy(method, "GET");
-
-        char sscheme[strlen(scheme)], mmethod[strlen(method)];
-        memset(sscheme, '\0', strlen(scheme));
-        memset(mmethod, '\0', strlen(method));
+        printf("Total Length till now:%d\n", total);
+        // Check for getfile string format
+        char sscheme[128];
+        char mmethod[128];
         char path[1024];
-        memset(path, '\0', 1024);
+        sscanf(start, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
 
-        sscanf(completeMessage, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
+        char completeMessage[1024];
+        sscanf(start, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
+        sprintf(completeMessage, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
+        printf("\n**********************\nComplete Message Received is %s\n", completeMessage);
         int send = 1;
-        if (((strcmp(sscheme, scheme) != 0) || (strcmp(sscheme, scheme) != 0)) != 0)
+        if (((strcmp(sscheme, "GETFILE") != 0) || (strcmp(mmethod, "GET") != 0)) != 0)
         {
             printf("Format error for scheme and method\n");
+            printf("%s %s", sscheme, mmethod);
             send = 0;
         }
         printf("Path is %s\n", path);
@@ -189,9 +215,16 @@ void gfserver_serve(gfserver_t **gfs)
         {
             send = 0;
         }
-        if (send == 1)
+
+        if (send == 0)
         {
-            (*gfs)->handler(&gfc, path, (*gfs)->handlerarg);
+            gfs_sendheader(&gfc, GF_INVALID, -1);
+            gfc->status = GF_INVALID;
+        }
+        else
+        {
+            strcpy((*gfc).path, path);
+            (*gfs)->handler(&gfc, (*gfc).path, (*gfs)->handlerarg);
         }
     }
 }
@@ -199,9 +232,9 @@ void gfserver_serve(gfserver_t **gfs)
 void gfserver_set_handlerarg(gfserver_t **gfs, void *arg)
 {
     //malloc
-    (*(*gfs)).handlerarg = malloc(sizeof(arg));
+    // (*(*gfs)).handlerarg = malloc(sizeof(arg));
     //memset to \0
-    memset((*(*gfs)).handlerarg, '\0', sizeof(arg));
+    // memset((*(*gfs)).handlerarg, '\0', sizeof(arg));
     (*(*gfs)).handlerarg = arg;
 }
 
