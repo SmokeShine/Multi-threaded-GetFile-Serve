@@ -16,5 +16,5 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/signal.h>
-
+#include <pthread.h>
 #endif // __GF_STUDENT_H__
