@@ -23,23 +23,22 @@ static struct option gLongOptions[] = {
     {"workload-path", required_argument, NULL, 'w'},
     {NULL, 0, NULL, 0}};
 
-extern int run_thread_b;
-extern pthread_mutex_t run_lock_b;
-extern pthread_cond_t run_cond_b;
 
-int run_thread_b = 0;
+// int run_thread_b = 0;
 pthread_mutex_t run_lock_b = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t run_cond_b = PTHREAD_COND_INITIALIZER;
 
 steque_t *list;
 volatile int requests_left = -1;
+char *server = "localhost";
+unsigned short port = 20121;
 
-typedef struct steque_package
-{
-  char *server;
-  char *req_path;
-  unsigned int port;
-} steque_package;
+// typedef struct steque_package
+// {
+//   char *server;
+//   char *req_path;
+//   unsigned int port;
+// } steque_package;
 
 static void Usage() { fprintf(stderr, "%s", USAGE); }
 
@@ -91,45 +90,43 @@ static void writecb(void *data, size_t data_len, void *arg)
   fwrite(data, 1, data_len, file);
 }
 
-void *worker(void *arguments)
+void *worker(void *argument)
 {
-
+  // int passed_in_value;
+  // passed_in_value = *((int *) argument);
+  char rreq_path[512];
+  char local_path[512];
+  // printf("Thread ID is: %ld with with requests left %d\n", (long) pthread_self(),requests_left);
   while (requests_left > 0)
   {
+    // printf("INSIDE LOOP : Thread ID is: %ld \n", (long) pthread_self());
 
-    pthread_mutex_lock(&run_lock_b);
-    while (run_thread_b == 0)
-    {
-      pthread_cond_wait(&run_cond_b, &run_lock_b);
-    }
-
-    // We have the lock now
-    steque_package *item = steque_pop(list);
-    requests_left = requests_left - 1;
-    printf("***************************\n");
-    printf("Number of requests left is %d\n", requests_left);
-    printf("Current Queue Size after popping is %d\n", steque_size(list));
-    printf("%d \t %s \t %s \n", requests_left, item->server, item->req_path);
-    printf("***************************\n");
-
-    run_thread_b = steque_size(list);
-    pthread_cond_signal(&run_cond_b);
-    pthread_mutex_unlock(&run_lock_b);
-
-    char local_path[512];
-    memset(local_path, '\0', 512);
-    localPath(item->req_path, local_path);
-    FILE *file = openFile(local_path);
     gfcrequest_t *gfr = NULL;
     gfr = gfc_create();
-
-    gfc_set_server(&gfr, item->server);
-    gfc_set_path(&gfr, item->req_path);
-    gfc_set_port(&gfr, item->port);
+    gfc_set_server(&gfr, server);
+    gfc_set_port(&gfr, port);
     gfc_set_writefunc(&gfr, writecb);
-    gfc_set_writearg(&gfr, file);
-    fprintf(stdout, "Requesting %s%s\n", item->server, item->req_path);
+
+    pthread_mutex_lock(&run_lock_b);
     int returncode = 0;
+    while (steque_isempty(list))
+    {
+      // printf(" QUEUE IS EMPTY NOW\n");
+      pthread_cond_wait(&run_cond_b, &run_lock_b);
+    }
+    
+    strcpy(rreq_path,steque_pop(list));
+    // printf("Thread ID is: %ld working on %s\n", (long) pthread_self(),rreq_path);
+    requests_left = requests_left - 1;
+    pthread_cond_broadcast(&run_cond_b);
+    pthread_mutex_unlock(&run_lock_b);
+    localPath(rreq_path, local_path);
+
+    FILE *file = openFile(local_path);
+    gfc_set_path(&gfr, rreq_path);
+    gfc_set_writearg(&gfr, file);
+
+    fprintf(stdout, "Requesting %s%s\n", server, rreq_path);
     if (0 > (returncode = gfc_perform(&gfr)))
     {
       fprintf(stdout, "gfc_perform returned an error %d\n", returncode);
@@ -153,7 +150,9 @@ void *worker(void *arguments)
             gfc_get_filelen(&gfr));
 
     gfc_cleanup(&gfr);
+    // printf("==================Requests Left - %d\n",requests_left);
   }
+  // printf("++++++++++++++++++++++++Exit for thread - %ld\n",(long) pthread_self());
   return 0;
 }
 
@@ -161,8 +160,6 @@ void *worker(void *arguments)
 int main(int argc, char **argv)
 {
   /* COMMAND LINE OPTIONS ============================================= */
-  char *server = "localhost";
-  unsigned short port = 20121;
   char *workload_path = "workload.txt";
   int option_char = 0;
   int nrequests = 2;
@@ -211,7 +208,7 @@ int main(int argc, char **argv)
 
   if (EXIT_SUCCESS != workload_init(workload_path))
   {
-    fprintf(stderr, "Unable to load workload file %s.\n", workload_path);
+    // fprintf(stderr, "Unable to load workload file %s.\n", workload_path);
     exit(EXIT_FAILURE);
   }
 
@@ -223,61 +220,66 @@ int main(int argc, char **argv)
   {
     nthreads = MAX_THREADS;
   }
-
+  if (nthreads > nrequests)
+  {
+    nthreads = nrequests;
+  }
+  requests_left = nrequests;
   gfc_global_init();
 
   /* add your threadpool creation here */
   list = (steque_t *)malloc(sizeof(steque_t));
   steque_init(list);
-  printf("Current length of list is %d\n", steque_size(list));
+  
+  // printf("Number of threads is %d\n", nthreads);
 
-  printf("Number of threads is %d\n", nthreads);
-
-  pthread_t thread_pool[nthreads];
+  pthread_t *thread_pool;
+  thread_pool=(pthread_t *)malloc(nthreads*sizeof(pthread_t));
   for (int i = 0; i < nthreads; i++)
   {
-    pthread_create(&thread_pool[i], NULL, worker, NULL);
+    pthread_create(&thread_pool[i], NULL, worker, (void *) &nrequests);
   }
 
   /* Build your queue of requests here */
-  requests_left = nrequests;
-  printf("Number of requests left is %d\n", requests_left);
-  steque_package *package;  
-  package = (steque_package *)malloc(sizeof(steque_package));
-
-  for (i = 0; i < nrequests; i++)
+  
+  for (i = 1; i <= nrequests; i++)
   {
-    printf("Current Request is %d\n", i);
+
+    // Push to queue
+    pthread_mutex_lock(&run_lock_b);
     req_path = workload_get_path();
-    printf("Req Path is %s\n", req_path);
+    // printf("Queue Push:Req Path is %s\n", req_path);
     if (strlen(req_path) > 1024)
     {
       fprintf(stderr, "Request path exceeded maximum of 1024 characters\n.");
       exit(EXIT_FAILURE);
     }
 
-    // Push to queue
-    pthread_mutex_lock(&run_lock_b);
-    memset(package,'\0',sizeof(steque_package));
-    package->port = port;
-    printf("Port is %d\n", package->port);
-    package->req_path = req_path;
-    package->server = server;
-    steque_enqueue(list, package);
-    
-    printf("Current length of list is %d\n", steque_size(list));
-    
-    run_thread_b = steque_size(list);
-    pthread_cond_signal(&run_cond_b); 
+    // steque_package *package;
+    // package = (steque_package *)malloc(sizeof(steque_package));
+    // package->port = port;
+    // package->req_path = req_path;
+    // package->server = server;
+    steque_enqueue(list, req_path);
+    /* Now wake thread B */
+    // run_thread_b = steque_size(list);
+    pthread_cond_signal(&run_cond_b); //broadcast
     pthread_mutex_unlock(&run_lock_b);
+    /* Note that when you have a worker thread pool, you will need to move this
+     * logic into the worker threads */
+
+    /*
+     * note that when you move the above logic into your worker thread, you will
+     * need to coordinate with the boss thread here to effect a clean shutdown.
+     */
   }
-  
   for (int i = 0; i < nthreads; i++)
-  {
+  { 
+    
     pthread_join(thread_pool[i], NULL);
   }
-  free(list);
-  free(package);
+  free(thread_pool);
+  steque_destroy(list);
   gfc_global_cleanup(); // use for any global cleanup for AFTER your thread
                         // pool has terminated.
 
