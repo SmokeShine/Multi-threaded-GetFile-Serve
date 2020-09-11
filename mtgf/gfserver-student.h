@@ -12,7 +12,7 @@
 
 typedef struct steque_package
 {
-    gfcontext_t **ctx;
+    gfcontext_t *ctx;
     const char *path;
     void* arg;
 } steque_package;

@@ -177,6 +177,7 @@ int main(int argc, char **argv)
             sent_bytes = send(establishedConnectionFD, buffer, bytesRead, 0);
             total_sent = sent_bytes + total_sent;
         }
+        fclose(fd); // last minute change
         close(establishedConnectionFD); // Close the existing socket which is connected to the client
     }
 }

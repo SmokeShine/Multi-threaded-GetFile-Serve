@@ -33,30 +33,42 @@ int run_thread_b;
 pthread_mutex_t run_lock_b;
 pthread_cond_t run_cond_b;
 
+
+
+
+
 gfh_error_t gfs_handler(gfcontext_t **ctx, const char *path, void *arg)
 {
 
+// // caller
+// int a = 10;
+// int *p = &a;
+// callee_function(&p);
+// // callee
+// callee_function(int **p){
+//   *p = NULL;
+// }
 	// enqueue request with struct
 	steque_package *package;
 	package = (steque_package *)malloc(sizeof(steque_package));
-	package->ctx = ctx;
+	package->ctx = *ctx;
 	package->path = path;
 	package->arg = arg;
 
 	// (*(*ctx)).;
-	printf("Path Received is %s \n",path);
-	printf("CTX sizeof is %ld\n",sizeof(*ctx));
+	// printf("Path Received is %s \n",path);
+	// printf("CTX sizeof is %ld\n",sizeof(*ctx));
 	
 	pthread_mutex_lock(&run_lock_b);
 	// Lock Acquired to update queue
 	// Let's queue more to the workers	
 	steque_enqueue(list, package);
-	printf("Current length of list is %d\n",steque_size(list));
+	// printf("Current length of list is %d\n",steque_size(list));
 	/* Now wake thread B */
-	run_thread_b = steque_size(list);
+	// run_thread_b = steque_size(list);
 	pthread_cond_signal(&run_cond_b); //broadcast
 	pthread_mutex_unlock(&run_lock_b);
-	// ctx=NULL;
+	*ctx=NULL;
 	// free(ctx); broken
 	return gfh_success;
 }
