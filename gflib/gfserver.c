@@ -1,10 +1,29 @@
-#include "gfserver-student.h"
-
-/* 
- * Modify this file to implement the interface specified in
- * gfserver.h.
+/*
+ ============================================================================
+ Name        : gfserver.c
+ Author      : Prateek Gupta
+ Version     : v1
+ ============================================================================
  */
 
+/*                                      File Usage - Ubuntu                                     */
+/*
+Compile: make clean all
+Execute: ./gfserver_main
+Return: -
+Example:
+root@8c9f19e07061:/workspace/pr1/gflib# ./gfserver_main -h
+usage:
+  gfserver_main [options]
+options:
+  -p [listen_port]    Listen port (Default: 20121)
+  -m [content_file]   Content file mapping keys to content files
+  -h                  Show this help message.
+*/
+
+#include "gfserver-student.h"
+
+// Struct to contain information about listening socket
 struct gfserver_t
 {
     unsigned int port;
@@ -14,6 +33,7 @@ struct gfserver_t
     gfcontext_t *socket_context;
 };
 
+// Struct to contain information about the client connection socket
 struct gfcontext_t
 {
     int establishedConnectionFD;
@@ -21,14 +41,15 @@ struct gfcontext_t
     char path[1024];
 };
 
-//Take ctx and abort something
+// Close connection to the client
 void gfs_abort(gfcontext_t **ctx)
 {
-    //one more non sense
     close((*ctx)->establishedConnectionFD);
     free((*ctx));
+    *ctx=NULL;
 }
 
+// Standard Error Trapping
 void error(const char *msg)
 {
     // Error function used for reporting issues
@@ -36,6 +57,7 @@ void error(const char *msg)
     exit(0);
 }
 
+// Allocate memory for server
 gfserver_t *gfserver_create()
 {
     gfserver_t *gfs;
@@ -43,24 +65,18 @@ gfserver_t *gfserver_create()
     return gfs;
 }
 
+// Send data to the client
 ssize_t gfs_send(gfcontext_t **ctx, const void *data, size_t len)
 {
     ssize_t bytessent = send((*ctx)->establishedConnectionFD, (void *)data, len, 0);
     return bytessent;
 }
 
+// Send header to the client
 ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
 {
-    printf("***********\n");
-
-    printf("%d\n", (*ctx)->status);
-    printf("%d\n", status);
-    printf("%d\n", (*ctx)->establishedConnectionFD);
-    // printf("%s\n", (*ctx)->path);
-    printf("***********\n");
-
+    // Status is provided by the handler; context is provided by the server
     char *header = (char *)malloc(128);
-
     if (status == GF_OK)
     {
         sprintf(header, "GETFILE OK %ld\r\n\r\n", file_len);
@@ -77,14 +93,12 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
     {
         strcpy(header, "GETFILE ERROR\r\n\r\n");
     }
-
     printf("Sending header to the client: %s\n", header);
-
+    // Send header to the client
     int i = send((*ctx)->establishedConnectionFD, (void *)header, strlen(header), 0);
-
     if (status != GF_OK)
     {
-        
+        // Error trapping for closing connection on invalid header
         (*ctx)->status = GF_INVALID;
         close((*ctx)->establishedConnectionFD);
         return -1;
@@ -92,29 +106,31 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
     return i;
 }
 
+// Start the server
 void gfserver_serve(gfserver_t **gfs)
 {
-    /* Socket Code Here */
-    int listenSocketFD, establishedConnectionFD; // listen on sock_fd, new connection on new_fd
+    // listen on sock_fd, new connection on new_fd
+    int listenSocketFD, establishedConnectionFD;
     struct addrinfo hints, *servinfo, *p;
-    struct sockaddr_storage their_addr; // connector's address information
+    // connector's address information
+    struct sockaddr_storage their_addr;
     socklen_t sin_size;
     int yes = 1;
-    // char s[INET6_ADDRSTRLEN];
     int rv;
     memset(&hints, 0, sizeof hints);
+    // Configuring IPV4/IPV6 connectivity
     hints.ai_family = AF_UNSPEC;
+    // Configuring TCP/UDP
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
     char PORT[256];
     sprintf(PORT, "%d", (*(*gfs)).port);
-
+    // Creating structure to contain information of service provider
     if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         exit(-1);
     }
-
     // loop through all the results and bind to the first we can
     for (p = servinfo; p != NULL; p = p->ai_next)
     {
@@ -141,25 +157,25 @@ void gfserver_serve(gfserver_t **gfs)
 
         break;
     }
-
-    freeaddrinfo(servinfo); // all done with this structure
+    // all done with this structure
+    freeaddrinfo(servinfo);
 
     if (p == NULL)
     {
         fprintf(stderr, "server: failed to bind\n");
         exit(1);
     }
-
-    listen(listenSocketFD, (*(*gfs)).max_npending); // Flip the socket on - it can now receive up to 5 connections
+    // Flip the socket on - it can now receive up to max_npending connections
+    listen(listenSocketFD, (*(*gfs)).max_npending);
     while (1)
     {
         // Accept a connection, blocking if one is not available until one connects
         sin_size = sizeof their_addr;
+        // Connect to client
         establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&their_addr, &sin_size);
-        gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t)); //what a waste of precious memory
+        gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t));
         (*gfs)->socket_context = gfc;
         (*gfc).establishedConnectionFD = establishedConnectionFD;
-
         if (establishedConnectionFD < 0)
             error("ERROR on accept");
         char *readBuffer;
@@ -167,13 +183,12 @@ void gfserver_serve(gfserver_t **gfs)
         int r = -1;
         // <scheme> <status> <length>\r\n\r\n<content>
         int total = 0;
-
         memset(readBuffer, '\0', 1024); // Clear the buffer
-
         char *start = readBuffer;
-        while (strstr(start, "\r\n\r\n") == NULL) // As long as we haven't found the terminal...
+        // Loop till end of header tag is found
+        while (strstr(start, "\r\n\r\n") == NULL)
         {
-            r = recv(establishedConnectionFD, (void *)readBuffer, 128, 0); // Get the next chunk
+            r = recv(establishedConnectionFD, (void *)readBuffer, 128, 0);
             if (r > 0)
             {
                 readBuffer = readBuffer + r;
@@ -188,18 +203,15 @@ void gfserver_serve(gfserver_t **gfs)
                 break;
             }
         }
-
-        printf("Total Length till now:%d\n", total);
         // Check for getfile string format
         char sscheme[128];
         char mmethod[128];
         char path[1024];
         sscanf(start, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
-
         char completeMessage[1024];
         sscanf(start, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
         sprintf(completeMessage, "%s %s %s\r\n\r\n", sscheme, mmethod, path);
-        printf("\n**********************\nComplete Message To be Send is %s\n", completeMessage);
+        // Check for format
         int send = 1;
         if (((strcmp(sscheme, "GETFILE") != 0) || (strcmp(mmethod, "GET") != 0)) != 0)
         {
@@ -207,47 +219,43 @@ void gfserver_serve(gfserver_t **gfs)
             printf("%s %s", sscheme, mmethod);
             send = 0;
         }
-        printf("Path is %s\n", path);
         int filestartcheck = -1;
         filestartcheck = strncmp(path, "/", 1);
         if (filestartcheck != 0)
         {
             send = 0;
         }
-
         if (send == 0)
         {
+            // Valid header; allow sending data
             gfs_sendheader(&gfc, GF_INVALID, -1);
             gfc->status = GF_INVALID;
         }
         else
         {
+            // Invalid header; close connection after sending header
             strcpy((*gfc).path, path);
             (*gfs)->handler(&gfc, (*gfc).path, (*gfs)->handlerarg);
         }
     }
 }
-
+// Set Handler Arguments
 void gfserver_set_handlerarg(gfserver_t **gfs, void *arg)
 {
-    //malloc
-    // (*(*gfs)).handlerarg = malloc(sizeof(arg));
-    //memset to \0
-    // memset((*(*gfs)).handlerarg, '\0', sizeof(arg));
     (*(*gfs)).handlerarg = arg;
 }
 
+// Set handler for the server
 void gfserver_set_handler(gfserver_t **gfs, gfh_error_t (*handler)(gfcontext_t **, const char *, void *))
 {
-    //looks like handler
     (*(*gfs)).handler = handler;
 }
-
+// Queue length of listening socket
 void gfserver_set_maxpending(gfserver_t **gfs, int max_npending)
 {
     (*(*gfs)).max_npending = max_npending;
 }
-
+// Set port for the server
 void gfserver_set_port(gfserver_t **gfs, unsigned short port)
 {
     (*(*gfs)).port = port;

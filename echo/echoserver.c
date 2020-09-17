@@ -1,3 +1,26 @@
+/*
+ ============================================================================
+ Name        : echoserver.c
+ Author      : Prateek Gupta
+ Version     : v1
+ ============================================================================
+ */
+
+/*                                      File Usage - Ubuntu                                     */
+/*
+Compile: make clean all
+Execute: ./echoserver
+Return: -
+Example:
+root@8c9f19e07061:/workspace/pr1/echo# ./echoserver -h
+usage:
+  echoserver [options]
+options:
+  -p                  Port (Default: 20121)
+  -m                  Maximum pending connections (default: 1)
+  -h                  Show this help message
+*/
+
 #include <getopt.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -10,6 +33,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 
+/* A buffer large enough to contain the longest allowed string */
 #define BUFSIZE 2012
 
 #define USAGE                                                        \
@@ -37,16 +61,18 @@ void error(const char *msg)
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
+  // Check if socket belongs to ipv4 family
   if (sa->sa_family == AF_INET)
   {
     return &(((struct sockaddr_in *)sa)->sin_addr);
   }
-
+  // Check if socket belongs to ipv6 family
   return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
 int main(int argc, char **argv)
 {
+  // Helper variables with default values
   int option_char;
   int portno = 20121; /* port to listen on */
   int maxnpending = 1;
@@ -74,13 +100,14 @@ int main(int argc, char **argv)
   }
 
   setbuf(stdout, NULL); // disable buffering
-
+  // Check for port number
   if ((portno < 1025) || (portno > 65535))
   {
     fprintf(stderr, "%s @ %d: invalid port number (%d)\n", __FILE__, __LINE__,
             portno);
     exit(1);
   }
+  // Queue length for listening socket
   if (maxnpending < 1)
   {
     fprintf(stderr, "%s @ %d: invalid pending count (%d)\n", __FILE__, __LINE__,
@@ -89,23 +116,27 @@ int main(int argc, char **argv)
   }
 
   /* Socket Code Here */
-
-  int listenSocketFD, establishedConnectionFD; // listen on sock_fd, new connection on new_fd
+  // Creating structure to contain information of service provider
+  // listen on sock_fd, new connection on establishedconnectionfd
+  int listenSocketFD, establishedConnectionFD; 
   struct addrinfo hints, *servinfo, *p;
-  struct sockaddr_storage their_addr; // connector's address information
+  // connector's address information
+  struct sockaddr_storage their_addr; 
   socklen_t sin_size;
   int yes = 1;
-  // char s[INET6_ADDRSTRLEN];
   int rv;
   char buffer[256];
   int charsRead = -1;
   memset(&hints, 0, sizeof hints);
+  // Configuring IPV4/IPV6 connectivity
   hints.ai_family = AF_UNSPEC;
+  // Configuring TCP/UDP Socket
   hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_PASSIVE; // use my IP
+  // use my IP
+  hints.ai_flags = AI_PASSIVE; 
   char PORT[256];
   sprintf(PORT, "%d", portno);
-
+  // Filling socket with default information
   if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0)
   {
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -138,36 +169,38 @@ int main(int argc, char **argv)
 
     break;
   }
-
-  freeaddrinfo(servinfo); // all done with this structure
+  // all done with this structure
+  freeaddrinfo(servinfo); 
 
   if (p == NULL)
   {
     fprintf(stderr, "server: failed to bind\n");
     exit(1);
   }
-
-  listen(listenSocketFD, 5); // Flip the socket on - it can now receive up to 5 connections
+  // Flip the socket on - it can now receive up to maxnpending connections
+  listen(listenSocketFD, maxnpending); 
   while (1)
   {
     // Accept a connection, blocking if one is not available until one connects
     sin_size = sizeof their_addr;
     establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&their_addr, &sin_size);
-
+    // Error in passing connect socket to client
     if (establishedConnectionFD < 0)
       error("ERROR on accept");
 
     // Get the message from the client and display it
     memset(buffer, '\0', 256);
-    charsRead = recv(establishedConnectionFD, buffer, 255, 0); // Read the client's message from the socket
+    // Read the client's message from the socket
+    charsRead = recv(establishedConnectionFD, buffer, 255, 0); 
     if (charsRead < 0)
       error("ERROR reading from socket");
-    // printf("%s", buffer);
 
     // Send a Success message back to the client
     charsRead = send(establishedConnectionFD, buffer, sizeof(buffer), 0); // Send success back
     if (charsRead < 0)
       error("ERROR writing to socket");
-    close(establishedConnectionFD); // Close the existing socket which is connected to the client
+    // Close the existing socket which is connected to the client
+    close(establishedConnectionFD); 
   }
+  // Never return
 }

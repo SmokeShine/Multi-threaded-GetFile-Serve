@@ -1,3 +1,27 @@
+/*
+ ============================================================================
+ Name        : gfclient.c
+ Author      : Prateek Gupta
+ Version     : v1
+ ============================================================================
+ */
+
+/*                                      File Usage - Ubuntu                                     */
+/*
+Compile: make clean all
+Execute: ./gfclient_download
+Return: -
+Example:
+root@8c9f19e07061:/workspace/pr1/gflib# ./gfclient_download -h
+usage:
+  webclient [options]
+options:
+  -h                  Show this help message
+  -n [num_requests]   Requests download per thread (Default: 2)
+  -p [server_port]    Server port (Default: 20121)
+  -s [server_addr]    Server address (Default: 127.0.0.1)
+  -l [workload_path]  Path to workload file (Default: workload.txt)
+*/
 
 #include "gfclient-student.h"
 
@@ -13,19 +37,17 @@
 #include <errno.h>
 #include <arpa/inet.h>
 
+// Struct for holding server socket information
 struct gfcrequest_t
 {
     char *server;
     char *req_path;
     unsigned short port;
-
     size_t bytesreceived;
     size_t filelen;
     gfstatus_t status;
     void *headerarg;
     void *writearg;
-    // function pointers declaration
-
     void (*headerfunc)(void *, size_t, void *);
     void (*writefunc)(void *, size_t, void *);
 };
@@ -37,6 +59,7 @@ void error(const char *msg)
     perror(msg);
     exit(0);
 }
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -44,7 +67,6 @@ void *get_in_addr(struct sockaddr *sa)
     {
         return &(((struct sockaddr_in *)sa)->sin_addr);
     }
-
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
@@ -55,71 +77,68 @@ void gfc_cleanup(gfcrequest_t **gfr)
     free((*gfr)->server);
     free(*gfr);
     *gfr = NULL;
-    // gfr=NULL;
 }
 
+// Allocate memory for client struct
 gfcrequest_t *gfc_create()
 {
-    // dummy for now - need to fill this part in
-    // fill the same way as server code
     gfcrequest_t *gfr;
     gfr = (gfcrequest_t *)malloc(sizeof(gfcrequest_t));
     gfr->bytesreceived = 0;
     gfr->filelen = 0;
     gfr->headerarg = NULL;
     gfr->writearg = NULL;
-
     return gfr;
 }
 
+// Get Information on bytes received
 size_t gfc_get_bytesreceived(gfcrequest_t **gfr)
 {
-    // not yet implemented
     return (*(*gfr)).bytesreceived;
 }
 
+// Get information on file length
 size_t gfc_get_filelen(gfcrequest_t **gfr)
 {
-    // not yet implemented
     return (*(*gfr)).filelen;
 }
 
+// Get status of request
 gfstatus_t gfc_get_status(gfcrequest_t **gfr)
 {
-    // not yet implemented
-//   GF_OK,
-//   GF_FILE_NOT_FOUND,
-//   GF_ERROR,
-//   GF_INVALID
     return (*(*gfr)).status;
 }
 
+// Initialize global variable
 void gfc_global_init()
 {
 }
 
+// Clear Global Variables from heap
 void gfc_global_cleanup()
 {
 }
-
+// Start the socket
 int gfc_perform(gfcrequest_t **gfr)
 {
-
+    // Helper variables with default values
     int socketFD;
     struct addrinfo hints, *servinfo, *p;
     int rv;
-
+    // Clearning memory for addrinfo
     memset(&hints, 0, sizeof hints);
+    // Setting IPV4/IPV6 Connectivity
     hints.ai_family = AF_UNSPEC;
+    // Setting Socket Type - TCP vs UDP
     hints.ai_socktype = SOCK_STREAM;
     char PORT[256];
     sprintf(PORT, "%d", (*(*gfr)).port);
+    // Filling the socket with default values
     if ((rv = getaddrinfo((*(*gfr)).server, PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
-
     // loop through all the results and connect to the first we can
     for (p = servinfo; p != NULL; p = p->ai_next)
     {
@@ -129,17 +148,14 @@ int gfc_perform(gfcrequest_t **gfr)
             perror("client: socket");
             continue;
         }
-
         if (connect(socketFD, p->ai_addr, p->ai_addrlen) == -1)
         {
             close(socketFD);
             perror("client: connect");
             continue;
         }
-
         break;
     }
-
     if (p == NULL)
     {
         fprintf(stderr, "client: failed to connect\n");
@@ -147,16 +163,14 @@ int gfc_perform(gfcrequest_t **gfr)
         freeaddrinfo(servinfo);
         return -1;
     }
-    freeaddrinfo(servinfo); // all done with this structure
+    // Freeing addrinfo
+    freeaddrinfo(servinfo);
     char message[BUFSIZ];
     memset(message, '\0', BUFSIZ);
-
-    // strcpy((*(*gfr)).req_path,"/delete");
     sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path, "\r\n\r\n");
-    
-    printf("Message is %s\n", message);
     int charsRead = -1;
-    charsRead = send(socketFD, message, strlen(message), 0); // Send File Request to Server
+    // Send File Request to Server
+    charsRead = send(socketFD, message, strlen(message), 0);
     if (charsRead <= 0)
     {
         error("ERROR writing to socket");
@@ -164,21 +178,13 @@ int gfc_perform(gfcrequest_t **gfr)
         close(socketFD);
         return -1;
     }
-    // else if (charsRead == 0)
-    // {
-    //     (*gfr)->status = GF_FILE_NOT_FOUND;
-    //     close(socketFD);
-    //     return -1;
-    // }
     // Start Receiving the data
     char *readBuffer;
     readBuffer = malloc(1024);
     int r = -1;
     // <scheme> <status> <length>\r\n\r\n<content>
     int total = 0;
-
     memset(readBuffer, '\0', 1024); // Clear the buffer
-
     char *start = readBuffer;
     while (strstr(start, "\r\n\r\n") == NULL) // As long as we haven't found the terminal...
     {
@@ -196,13 +202,12 @@ int gfc_perform(gfcrequest_t **gfr)
             return -1;
         }
     }
-
-    printf("Total Length till now:%d\n", total);
     // Check for getfile string format
     char sscheme[128];
     char sstatus[128];
     char placeholderint[128];
-    sscanf(start, "%s %s %s\r\n\r\n", sscheme,sstatus, placeholderint);
+    sscanf(start, "%s %s %s\r\n\r\n", sscheme, sstatus, placeholderint);
+    // Update status
     if (strcmp(sstatus, "OK") == 0)
         (*gfr)->status = GF_OK;
     else if (strcmp(sstatus, "FILE_NOT_FOUND") == 0)
@@ -210,81 +215,63 @@ int gfc_perform(gfcrequest_t **gfr)
     else if (strcmp(sstatus, "ERROR") == 0)
         (*gfr)->status = GF_ERROR;
 
-   if ((*(*gfr)).status == GF_FILE_NOT_FOUND)
+    if ((*(*gfr)).status == GF_FILE_NOT_FOUND)
     {
         free(start);
         close(socketFD);
         return 0;
     }
-
-   if ((*(*gfr)).status == GF_ERROR)
+    if ((*(*gfr)).status == GF_ERROR)
     {
         free(start);
         close(socketFD);
         return 0;
     }
-    
-   if (strcmp(sscheme, "GETFILE") != 0)
+    if (strcmp(sscheme, "GETFILE") != 0)
     {
-        (*(*gfr)).status=GF_INVALID;
+        (*(*gfr)).status = GF_INVALID;
         free(start);
         close(socketFD);
         return -1;
     }
     size_t filelength = atoi(placeholderint);
-   if (filelength == 0)
+    if (filelength == 0)
     {
-        (*(*gfr)).status=GF_INVALID;
+        (*(*gfr)).status = GF_INVALID;
         free(start);
         close(socketFD);
         return -1;
     }
     char header[128];
     sprintf(header, "GETFILE %s %ld\r\n\r\n", sstatus, filelength);
-    printf("%s\n", header);
     int header_length = strlen(header);
-
     char *data;
     data = start + header_length;
     int bytesreceived = total - header_length;
-    printf("Partial Data Received is %d\n", bytesreceived);
     printf("Total File Length is %ld\n", filelength);
+    // Call Handler
     (*gfr)->writefunc((void *)data, bytesreceived, (*gfr)->writearg);
-    
     int remaining_data = filelength - bytesreceived;
-    int i=0;
+    // Start Receiving File Data
     if ((*gfr)->status == GF_OK)
     {
-        r=1;
-        while ((remaining_data != 0)&&(r>0))
+        r = 1;
+        while ((remaining_data != 0) && (r > 0))
         {
-            memset(readBuffer, '\0', 128); 
-            r=-1;
-            // printf("Break now -%d\n",r);
+            memset(readBuffer, '\0', 128);
+            r = -1;
             r = recv(socketFD, (void *)readBuffer, 128, 0);
             if (r > 0)
             {
                 bytesreceived = bytesreceived + r;
                 remaining_data = remaining_data - r;
+                // Write bytes received to file
                 (*gfr)->writefunc((void *)readBuffer, r, (*gfr)->writearg);
-                // Clear the buffer
-                //Updating
-                
-                // printf("Break now -%d\n",r);
-                // sleep(2);
-                // (*(*gfr)).status = GF_OK; //if file is sent from the server
                 (*(*gfr)).bytesreceived = bytesreceived;
                 (*(*gfr)).filelen = filelength;
-                if(i%1000==0)
-                {
-                    printf("%d\tTotal Bytes Received: %d\n",i,bytesreceived);
-                    printf("%d\tTotal Bytes Remaining: %d\n",i,remaining_data);
-                }
-                i++;
             }
             else if (r < 0)
             {
-                // (*(*gfr)).status = GF_INVALID;
                 printf("ERROR: EXITING LOOP; Remaining data is %d\n", remaining_data);
                 free(start);
                 close(socketFD);
@@ -296,20 +283,16 @@ int gfc_perform(gfcrequest_t **gfr)
                 close(socketFD);
                 return -1;
             }
-            
         }
     }
-    
+    // Error Trapping
     if ((remaining_data < 0) || (*(*gfr)).status != GF_OK)
     {
         free(start);
         close(socketFD);
         return -1;
     }
-
-    printf("\n********************\n%d\tTotal Bytes Received: %d\n",i,bytesreceived);
-    printf("%d\tTotal Bytes Remaining: %d\n********************\n",i,remaining_data);
-
+    // Free the socket
     free(start);
     close(socketFD);
     return 0;
@@ -401,6 +384,5 @@ const char *gfc_strstatus(gfstatus_t status)
     }
     break;
     }
-
     return strstatus;
 }

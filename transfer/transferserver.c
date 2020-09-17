@@ -1,3 +1,24 @@
+/*
+ ============================================================================
+ Name        : transferserver.c
+ Author      : Prateek Gupta
+ Version     : v1
+ ============================================================================
+ */
+
+/*                                      File Usage - Ubuntu                                     */
+/*
+Compile: make clean all
+Execute: ./transferserver
+Return: -
+Example:
+root@8c9f19e07061:/workspace/pr1/transfer# ./transferserver -h
+usage:
+  transferserver [options]
+options:
+  -f                  Filename (Default: 6200.txt)
+  -h                  Show this help message
+  -p                  Port (Default: 20801)*/
 #include <getopt.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -9,14 +30,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <arpa/inet.h>
-
-/*Error handlers for socket connections*/
-void error(const char *msg)
-{
-    // Error function used for reporting issues
-    perror(msg);
-    exit(0);
-}
 
 #define BUFSIZE 820
 
@@ -35,8 +48,17 @@ static struct option gLongOptions[] = {
     {"port", required_argument, NULL, 'p'},
     {NULL, 0, NULL, 0}};
 
+/*Error handlers for socket connections*/
+void error(const char *msg)
+{
+    // Error function used for reporting issues
+    perror(msg);
+    exit(0);
+}
+
 int main(int argc, char **argv)
 {
+    // Helper variables with default values
     int option_char;
     int portno = 20801;          /* port to listen on */
     char *filename = "6200.txt"; /* file to transfer */
@@ -63,13 +85,13 @@ int main(int argc, char **argv)
             break;
         }
     }
-
+    //  Check portnumber
     if ((portno < 1025) || (portno > 65535))
     {
         fprintf(stderr, "%s @ %d: invalid port number (%d)\n", __FILE__, __LINE__, portno);
         exit(1);
     }
-
+    // Check for filename
     if (NULL == filename)
     {
         fprintf(stderr, "%s @ %d: invalid filename\n", __FILE__, __LINE__);
@@ -77,20 +99,25 @@ int main(int argc, char **argv)
     }
 
     /* Socket Code Here */
-    int listenSocketFD, establishedConnectionFD; // listen on sock_fd, new connection on new_fd
+    // Creating structure to contain information of service provider
+    // listen on sock_fd, new connection on establishedconnectionfd
+    int listenSocketFD, establishedConnectionFD;
     struct addrinfo hints, *servinfo, *p;
-    struct sockaddr_storage their_addr; // connector's address information
+    // connector's address information
+    struct sockaddr_storage their_addr;
     socklen_t sin_size;
     int yes = 1;
-    // char s[INET6_ADDRSTRLEN];
     int rv;
     memset(&hints, 0, sizeof hints);
+    // Configuring IPV4/IPV6 connectivity
     hints.ai_family = AF_UNSPEC;
+    // Configuring TCP/UDP Socket
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use my IP
+    // use my IP
+    hints.ai_flags = AI_PASSIVE;
     char PORT[256];
     sprintf(PORT, "%d", portno);
-
+    // Filling socket with default information
     if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -123,16 +150,16 @@ int main(int argc, char **argv)
 
         break;
     }
-
-    freeaddrinfo(servinfo); // all done with this structure
+    // all done with this structure
+    freeaddrinfo(servinfo);
 
     if (p == NULL)
     {
         fprintf(stderr, "server: failed to bind\n");
         exit(1);
     }
-
-    listen(listenSocketFD, 5); // Flip the socket on - it can now receive up to 5 connections
+    // Flip the socket on - it can now receive up to 5 connections
+    listen(listenSocketFD, 5);
     while (1)
     {
         // Accept a connection, blocking if one is not available until one connects
@@ -141,43 +168,24 @@ int main(int argc, char **argv)
 
         if (establishedConnectionFD < 0)
             error("ERROR on accept");
-
-        // /* Step 6: Know the filesize of encrypted file*/
-        // struct stat file_stat;
+        // Open the file
         FILE *fd;
         fd = fopen(filename, "r");
-        // char file_size[512];
-        // int remain_data = -1;
-        // ssize_t len;
-        // fd = open(filename, O_RDONLY);
-        // if (fd == -1)
-        // {
-        //     fprintf(stderr, "Error opening file --> %s", strerror(errno));
-
-        //     exit(EXIT_FAILURE);
-        // }
-
-        // /* Get file stats */
-
-        // if (fstat(fd, &file_stat) < 0)
-        // {
-        //     fprintf(stderr, "Error fstat --> %s", strerror(errno));
-
-        //     exit(EXIT_FAILURE);
-        // }
-        // remain_data = file_stat.st_size;
-        /* Sending file data */
         int sent_bytes = -1;
         int total_sent = 0;
         int bytesRead = -1;
         char buffer[128];
         memset(buffer, '\0', 128);
+        // Read Data From File
         while ((bytesRead = fread(buffer, 1, sizeof(buffer), fd)) > 0)
         {
+            // Send Data to client
             sent_bytes = send(establishedConnectionFD, buffer, bytesRead, 0);
             total_sent = sent_bytes + total_sent;
         }
-        fclose(fd); // last minute change
-        close(establishedConnectionFD); // Close the existing socket which is connected to the client
+        // Close file
+        fclose(fd);
+        // Close socket
+        close(establishedConnectionFD);
     }
 }

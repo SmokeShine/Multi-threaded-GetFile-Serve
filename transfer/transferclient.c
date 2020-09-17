@@ -1,3 +1,26 @@
+/*
+ ============================================================================
+ Name        : transferclient.c
+ Author      : Prateek Gupta
+ Version     : v1
+ ============================================================================
+ */
+
+/*                                      File Usage - Ubuntu                                     */
+/*
+Compile: make clean all
+Execute: ./transferclient
+Return: Text send to server and echoed back
+Example:
+root@8c9f19e07061:/workspace/pr1/echo# ./transferclient -h
+usage:
+  transferclient [options]
+options:
+  -s                  Server (Default: localhost)
+  -p                  Port (Default: 20801)
+  -o                  Output file (Default cs6200.txt)
+  -h                  Show this help message
+  */
 #include <getopt.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -9,16 +32,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <arpa/inet.h>
-
-char *message = "Hello World!!";
-
-/*Error handlers for socket connections*/
-void error(const char *msg)
-{
-    // Error function used for reporting issues
-    perror(msg);
-    exit(0);
-}
 
 #define BUFSIZE 820
 
@@ -39,15 +52,24 @@ static struct option gLongOptions[] = {
     {"help", no_argument, NULL, 'h'},
     {NULL, 0, NULL, 0}};
 
+char *message = "Hello World!!";
+
+/*Error handlers for socket connections*/
+void error(const char *msg)
+{
+    // Error function used for reporting issues
+    perror(msg);
+    exit(0);
+}
+
 /* Main ========================================================= */
 int main(int argc, char **argv)
 {
+    // Helper variables with default values
     int option_char = 0;
     char *hostname = "localhost";
     unsigned short portno = 20801;
     char *filename = "cs6200.txt";
-    // char *filename = "test.txt";
-    // truncate -s 10M output.file
     setbuf(stdout, NULL);
 
     // Parse and set command line arguments
@@ -73,19 +95,19 @@ int main(int argc, char **argv)
             break;
         }
     }
-
+    // Check for server address
     if (NULL == hostname)
     {
         fprintf(stderr, "%s @ %d: invalid host name\n", __FILE__, __LINE__);
         exit(1);
     }
-
+    // Check for filename
     if (NULL == filename)
     {
         fprintf(stderr, "%s @ %d: invalid filename\n", __FILE__, __LINE__);
         exit(1);
     }
-
+    // Check for port number
     if ((portno < 1025) || (portno > 65535))
     {
         fprintf(stderr, "%s @ %d: invalid port number (%d)\n", __FILE__, __LINE__, portno);
@@ -93,20 +115,24 @@ int main(int argc, char **argv)
     }
 
     /* Socket Code Here */
+    // Creating structure to contain information of service provider
     int socketFD;
     struct addrinfo hints, *servinfo, *p;
     int rv;
-    // char s[INET6_ADDRSTRLEN];
-
+    // Clearning memory for addrinfo
     memset(&hints, 0, sizeof hints);
+    // Setting IPV4/IPV6 Connectivity
     hints.ai_family = AF_UNSPEC;
+    // Setting Socket Type - TCP vs UDP
     hints.ai_socktype = SOCK_STREAM;
 
     char PORT[256];
     sprintf(PORT, "%d", portno);
+    // Filling the socket with default values
     if ((rv = getaddrinfo(hostname, PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        // Error: Return 0 for successful exit and positive value for error
         return 1;
     }
 
@@ -126,26 +152,19 @@ int main(int argc, char **argv)
             perror("client: connect");
             continue;
         }
-
         break;
     }
 
     if (p == NULL)
     {
+
         fprintf(stderr, "client: failed to connect\n");
         freeaddrinfo(servinfo);
         return 2;
     }
-
-    //  char s[INET6_ADDRSTRLEN];
-
-    // inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
-    //         s, sizeof s);
-    // printf("%s---",s);
-    // printf("%d---",p->ai_family);
-
-    freeaddrinfo(servinfo); // all done with this structure
-
+    // Freeing addrinfo
+    freeaddrinfo(servinfo);
+    // Opening File
     FILE *received_file;
     received_file = fopen(filename, "w");
     if (received_file == NULL)
@@ -155,11 +174,15 @@ int main(int argc, char **argv)
     char buffer[1024];
     int charsRead;
     memset(buffer, '\0', 1024);
+    // Start writing data to buffer
     while ((charsRead = recv(socketFD, buffer, sizeof(buffer), 0)) > 0)
     {
+        // Write Data to File
         fwrite(buffer, sizeof(char), charsRead, received_file);
     }
+    // Close the file
     fclose(received_file);
-    close(socketFD); // Close the socket
+    // Close the socket
+    close(socketFD); 
     return 0;
 }
