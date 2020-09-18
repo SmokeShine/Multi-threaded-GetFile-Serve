@@ -44,9 +44,10 @@ struct gfcontext_t
 // Close connection to the client
 void gfs_abort(gfcontext_t **ctx)
 {
-    close((*ctx)->establishedConnectionFD);
-    free((*ctx));
-    *ctx=NULL;
+    gfcontext_t *context=*ctx;
+    close(context->establishedConnectionFD);
+    free(context);
+    context=NULL;
 }
 
 // Standard Error Trapping
@@ -68,13 +69,15 @@ gfserver_t *gfserver_create()
 // Send data to the client
 ssize_t gfs_send(gfcontext_t **ctx, const void *data, size_t len)
 {
-    ssize_t bytessent = send((*ctx)->establishedConnectionFD, (void *)data, len, 0);
+    gfcontext_t *context=*ctx;
+    ssize_t bytessent = send(context->establishedConnectionFD, (void *)data, len, 0);
     return bytessent;
 }
 
 // Send header to the client
 ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
 {
+    gfcontext_t *context=*ctx;
     // Status is provided by the handler; context is provided by the server
     char *header = (char *)malloc(128);
     if (status == GF_OK)
@@ -95,12 +98,12 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
     }
     printf("Sending header to the client: %s\n", header);
     // Send header to the client
-    int i = send((*ctx)->establishedConnectionFD, (void *)header, strlen(header), 0);
+    int i = send(context->establishedConnectionFD, (void *)header, strlen(header), 0);
     if (status != GF_OK)
     {
         // Error trapping for closing connection on invalid header
-        (*ctx)->status = GF_INVALID;
-        close((*ctx)->establishedConnectionFD);
+        context->status = GF_INVALID;
+        close(context->establishedConnectionFD);
         return -1;
     }
     return i;
@@ -109,6 +112,7 @@ ssize_t gfs_sendheader(gfcontext_t **ctx, gfstatus_t status, size_t file_len)
 // Start the server
 void gfserver_serve(gfserver_t **gfs)
 {
+    gfserver_t *server=*gfs;
     // listen on sock_fd, new connection on new_fd
     int listenSocketFD, establishedConnectionFD;
     struct addrinfo hints, *servinfo, *p;
@@ -124,7 +128,7 @@ void gfserver_serve(gfserver_t **gfs)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
     char PORT[256];
-    sprintf(PORT, "%d", (*(*gfs)).port);
+    sprintf(PORT, "%d", server->port);
     // Creating structure to contain information of service provider
     if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0)
     {
@@ -166,7 +170,7 @@ void gfserver_serve(gfserver_t **gfs)
         exit(1);
     }
     // Flip the socket on - it can now receive up to max_npending connections
-    listen(listenSocketFD, (*(*gfs)).max_npending);
+    listen(listenSocketFD, server->max_npending);
     while (1)
     {
         // Accept a connection, blocking if one is not available until one connects
@@ -174,8 +178,8 @@ void gfserver_serve(gfserver_t **gfs)
         // Connect to client
         establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&their_addr, &sin_size);
         gfcontext_t *gfc = (gfcontext_t *)malloc(sizeof(gfcontext_t));
-        (*gfs)->socket_context = gfc;
-        (*gfc).establishedConnectionFD = establishedConnectionFD;
+        server->socket_context = gfc;
+        gfc->establishedConnectionFD = establishedConnectionFD;
         if (establishedConnectionFD < 0)
             error("ERROR on accept");
         char *readBuffer;
@@ -199,7 +203,6 @@ void gfserver_serve(gfserver_t **gfs)
             {
                 perror("Error in receiving data\n");
                 gfc->status = GF_ERROR;
-                gfs_abort(&gfc);
                 break;
             }
         }
@@ -234,29 +237,33 @@ void gfserver_serve(gfserver_t **gfs)
         else
         {
             // Invalid header; close connection after sending header
-            strcpy((*gfc).path, path);
-            (*gfs)->handler(&gfc, (*gfc).path, (*gfs)->handlerarg);
+            strcpy(gfc->path, path);
+            server->handler(&gfc, gfc->path, server->handlerarg);
         }
     }
 }
 // Set Handler Arguments
 void gfserver_set_handlerarg(gfserver_t **gfs, void *arg)
 {
-    (*(*gfs)).handlerarg = arg;
+    gfserver_t *server=*gfs;
+    server->handlerarg = arg;
 }
 
 // Set handler for the server
 void gfserver_set_handler(gfserver_t **gfs, gfh_error_t (*handler)(gfcontext_t **, const char *, void *))
 {
-    (*(*gfs)).handler = handler;
+    gfserver_t *server=*gfs;
+    server->handler = handler;
 }
 // Queue length of listening socket
 void gfserver_set_maxpending(gfserver_t **gfs, int max_npending)
 {
-    (*(*gfs)).max_npending = max_npending;
+    gfserver_t *server=*gfs;
+    server->max_npending = max_npending;
 }
 // Set port for the server
 void gfserver_set_port(gfserver_t **gfs, unsigned short port)
 {
-    (*(*gfs)).port = port;
+    gfserver_t *server=*gfs;
+    server->port = port;
 }

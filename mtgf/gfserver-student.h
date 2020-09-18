@@ -10,6 +10,7 @@
 #include "steque.h"
 #include <fcntl.h>
 
+// Element in the queue
 typedef struct steque_package
 {
     gfcontext_t *ctx;

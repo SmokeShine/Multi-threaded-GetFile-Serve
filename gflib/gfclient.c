@@ -94,19 +94,22 @@ gfcrequest_t *gfc_create()
 // Get Information on bytes received
 size_t gfc_get_bytesreceived(gfcrequest_t **gfr)
 {
-    return (*(*gfr)).bytesreceived;
+    gfcrequest_t *serv=*gfr;
+    return serv->bytesreceived;
 }
 
 // Get information on file length
 size_t gfc_get_filelen(gfcrequest_t **gfr)
 {
-    return (*(*gfr)).filelen;
+    gfcrequest_t *serv=*gfr;
+    return serv->filelen;
 }
 
 // Get status of request
 gfstatus_t gfc_get_status(gfcrequest_t **gfr)
 {
-    return (*(*gfr)).status;
+    gfcrequest_t *serv=*gfr;
+    return serv->status;
 }
 
 // Initialize global variable
@@ -121,6 +124,7 @@ void gfc_global_cleanup()
 // Start the socket
 int gfc_perform(gfcrequest_t **gfr)
 {
+    gfcrequest_t *serv=*gfr;
     // Helper variables with default values
     int socketFD;
     struct addrinfo hints, *servinfo, *p;
@@ -132,9 +136,9 @@ int gfc_perform(gfcrequest_t **gfr)
     // Setting Socket Type - TCP vs UDP
     hints.ai_socktype = SOCK_STREAM;
     char PORT[256];
-    sprintf(PORT, "%d", (*(*gfr)).port);
+    sprintf(PORT, "%d", serv->port);
     // Filling the socket with default values
-    if ((rv = getaddrinfo((*(*gfr)).server, PORT, &hints, &servinfo)) != 0)
+    if ((rv = getaddrinfo(serv->server, PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
@@ -159,7 +163,7 @@ int gfc_perform(gfcrequest_t **gfr)
     if (p == NULL)
     {
         fprintf(stderr, "client: failed to connect\n");
-        (*gfr)->status = GF_INVALID;
+        serv->status = GF_INVALID;
         freeaddrinfo(servinfo);
         return -1;
     }
@@ -167,14 +171,14 @@ int gfc_perform(gfcrequest_t **gfr)
     freeaddrinfo(servinfo);
     char message[BUFSIZ];
     memset(message, '\0', BUFSIZ);
-    sprintf(message, "%s %s %s", "GETFILE GET", (*(*gfr)).req_path, "\r\n\r\n");
+    sprintf(message, "%s %s %s", "GETFILE GET", serv->req_path, "\r\n\r\n");
     int charsRead = -1;
     // Send File Request to Server
     charsRead = send(socketFD, message, strlen(message), 0);
     if (charsRead <= 0)
     {
         error("ERROR writing to socket");
-        (*gfr)->status = GF_INVALID;
+        serv->status = GF_INVALID;
         close(socketFD);
         return -1;
     }
@@ -196,7 +200,7 @@ int gfc_perform(gfcrequest_t **gfr)
         }
         else
         {
-            (*gfr)->status = GF_INVALID;
+            serv->status = GF_INVALID;
             free(start);
             close(socketFD);
             return -1;
@@ -209,19 +213,19 @@ int gfc_perform(gfcrequest_t **gfr)
     sscanf(start, "%s %s %s\r\n\r\n", sscheme, sstatus, placeholderint);
     // Update status
     if (strcmp(sstatus, "OK") == 0)
-        (*gfr)->status = GF_OK;
+        serv->status = GF_OK;
     else if (strcmp(sstatus, "FILE_NOT_FOUND") == 0)
-        (*gfr)->status = GF_FILE_NOT_FOUND;
+        serv->status = GF_FILE_NOT_FOUND;
     else if (strcmp(sstatus, "ERROR") == 0)
-        (*gfr)->status = GF_ERROR;
+        serv->status = GF_ERROR;
 
-    if ((*(*gfr)).status == GF_FILE_NOT_FOUND)
+    if (serv->status == GF_FILE_NOT_FOUND)
     {
         free(start);
         close(socketFD);
         return 0;
     }
-    if ((*(*gfr)).status == GF_ERROR)
+    if (serv->status == GF_ERROR)
     {
         free(start);
         close(socketFD);
@@ -229,7 +233,7 @@ int gfc_perform(gfcrequest_t **gfr)
     }
     if (strcmp(sscheme, "GETFILE") != 0)
     {
-        (*(*gfr)).status = GF_INVALID;
+        serv->status = GF_INVALID;
         free(start);
         close(socketFD);
         return -1;
@@ -237,7 +241,7 @@ int gfc_perform(gfcrequest_t **gfr)
     size_t filelength = atoi(placeholderint);
     if (filelength == 0)
     {
-        (*(*gfr)).status = GF_INVALID;
+        serv->status = GF_INVALID;
         free(start);
         close(socketFD);
         return -1;
@@ -250,10 +254,10 @@ int gfc_perform(gfcrequest_t **gfr)
     int bytesreceived = total - header_length;
     printf("Total File Length is %ld\n", filelength);
     // Call Handler
-    (*gfr)->writefunc((void *)data, bytesreceived, (*gfr)->writearg);
+    serv->writefunc((void *)data, bytesreceived, serv->writearg);
     int remaining_data = filelength - bytesreceived;
     // Start Receiving File Data
-    if ((*gfr)->status == GF_OK)
+    if (serv->status == GF_OK)
     {
         r = 1;
         while ((remaining_data != 0) && (r > 0))
@@ -266,9 +270,9 @@ int gfc_perform(gfcrequest_t **gfr)
                 bytesreceived = bytesreceived + r;
                 remaining_data = remaining_data - r;
                 // Write bytes received to file
-                (*gfr)->writefunc((void *)readBuffer, r, (*gfr)->writearg);
-                (*(*gfr)).bytesreceived = bytesreceived;
-                (*(*gfr)).filelen = filelength;
+                serv->writefunc((void *)readBuffer, r, serv->writearg);
+                serv->bytesreceived = bytesreceived;
+                serv->filelen = filelength;
             }
             else if (r < 0)
             {
@@ -286,7 +290,7 @@ int gfc_perform(gfcrequest_t **gfr)
         }
     }
     // Error Trapping
-    if ((remaining_data < 0) || (*(*gfr)).status != GF_OK)
+    if ((remaining_data < 0) || (serv->status != GF_OK))
     {
         free(start);
         close(socketFD);
@@ -300,52 +304,52 @@ int gfc_perform(gfcrequest_t **gfr)
 
 void gfc_set_headerarg(gfcrequest_t **gfr, void *headerarg)
 {
-    // another pointer
-    // void - cannot assume strlen will work
-    (*(*gfr)).headerarg = malloc(sizeof(headerarg) + 1);
+    gfcrequest_t *serv=*gfr;
+    serv->headerarg = malloc(sizeof(headerarg) + 1);
     //memset to \0
-    memset((*(*gfr)).headerarg, '\0', sizeof(headerarg) + 1);
-    (*(*gfr)).headerarg = headerarg;
+    memset(serv->headerarg, '\0', sizeof(headerarg) + 1);
+    serv->headerarg = headerarg;
 }
 
 void gfc_set_headerfunc(gfcrequest_t **gfr, void (*headerfunc)(void *, size_t, void *))
 {
-    //pointer - need to add \r\n\r\n end of header
-    //there is a function pointer as argument
-    (*gfr)->headerfunc = headerfunc;
+    gfcrequest_t *serv=*gfr;
+    serv->headerfunc = headerfunc;
 }
 
 void gfc_set_path(gfcrequest_t **gfr, const char *path)
 {
-    // pointer - put into heap
-    (*(*gfr)).req_path = (char *)malloc((strlen(path) * sizeof(char)) + 1);
-    //memset to \0
-    memset((*(*gfr)).req_path, '\0', (strlen(path) * sizeof(char)) + 1);
-    strcpy((*(*gfr)).req_path, path);
+    gfcrequest_t *serv=*gfr;
+    serv->req_path = (char *)malloc((strlen(path) * sizeof(char)) + 1);
+    memset(serv->req_path, '\0', (strlen(path) * sizeof(char)) + 1);
+    strcpy(serv->req_path, path);
 }
 
 void gfc_set_port(gfcrequest_t **gfr, unsigned short port)
 {
-    (*(*gfr)).port = port;
+    gfcrequest_t *serv=*gfr;
+    serv->port = port;
 }
 
 void gfc_set_server(gfcrequest_t **gfr, const char *server)
 {
-    // pointer - put into heap
-    (*(*gfr)).server = (char *)malloc((strlen(server) * sizeof(char)) + 1);
+    gfcrequest_t *serv=*gfr;
+    serv->server = (char *)malloc((strlen(server) * sizeof(char)) + 1);
     //memset to \0
-    memset((*(*gfr)).server, '\0', (strlen(server) * sizeof(char)) + 1);
-    strcpy((*(*gfr)).server, server);
+    memset(serv->server, '\0', (strlen(server) * sizeof(char)) + 1);
+    strcpy(serv->server, server);
 }
 
 void gfc_set_writearg(gfcrequest_t **gfr, void *writearg)
 {
-    (*(*gfr)).writearg = writearg;
+    gfcrequest_t *serv=*gfr;
+    serv->writearg = writearg;
 }
 
 void gfc_set_writefunc(gfcrequest_t **gfr, void (*writefunc)(void *, size_t, void *))
 {
-    (*(*gfr)).writefunc = writefunc;
+    gfcrequest_t *serv=*gfr;
+    serv->writefunc = writefunc;
 }
 
 const char *gfc_strstatus(gfstatus_t status)

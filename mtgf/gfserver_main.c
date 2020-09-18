@@ -1,4 +1,28 @@
 
+/*
+ ============================================================================
+ Name        : gfserver_main.c
+ Author      : Prateek Gupta
+ Version     : v1
+ ============================================================================
+ */
+
+/*                                      File Usage - Ubuntu                                     */
+/*
+Compile: make clean all
+Execute: ./gfserver_main
+Return: -
+Example:
+root@8c9f19e07061:/workspace/pr1/mtgf# ./gfserver_main -h   
+usage:
+  gfserver_main [options]
+options:
+  -t [nthreads]       Number of threads (Default: 7)
+  -p [listen_port]    Listen port (Default: 20121)
+  -m [content_file]   Content file mapping keys to content files
+  -d [delay]          Delay in content_get, default 0, range 0-5000000 (microseconds)
+   -h                  Show this help message.*/
+
 #include "gfserver-student.h"
 
 #define USAGE                                                               \
@@ -21,21 +45,14 @@ static struct option gLongOptions[] = {
     {"help", no_argument, NULL, 'h'},
     {NULL, 0, NULL, 0}};
 
+// Global Variables for thread control
 extern steque_t *list;
-
-// extern int run_thread_a;
-// extern pthread_mutex_t run_lock_a ;
-// extern pthread_cond_t run_cond_a;
-
-// int run_thread_a=0;
-// pthread_mutex_t run_lock_a= PTHREAD_MUTEX_INITIALIZER;
-// pthread_cond_t run_cond_a = PTHREAD_COND_INITIALIZER;
-
 extern int run_thread_b;
 extern pthread_mutex_t run_lock_b;
 extern pthread_cond_t run_cond_b;
-
+// Initializing values
 int run_thread_b = 0;
+// Using default mutex type
 pthread_mutex_t run_lock_b = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t run_cond_b = PTHREAD_COND_INITIALIZER;
 
@@ -50,48 +67,36 @@ static void _sig_handler(int signo)
     exit(signo);
   }
 }
-
+// Worker Thread
 void *worker(void *arguments)
 {
-  // printf("Thread ID is: %ld\n", (long) pthread_self());
+  // Loop Forever - Threads should never exit on its own
   while (1)
   {
     char buffer[1024];
-
     /* Wait for Thread B to be runnable */
     pthread_mutex_lock(&run_lock_b);
-
     while (steque_isempty(list))
     {
       pthread_cond_wait(&run_cond_b, &run_lock_b);
     }
-
     // Lock Acquired to update queue
     steque_package *item = steque_pop(list);
-    // printf("File Name Stripped is %s\n",openfile);
-    // printf("Thread ID is: %ld working on %s\n", (long) pthread_self(),openfile);
-    // gfcontext_t *cctx = (gfcontext_t *)malloc(sizeof(gfcontext_t*));
-    // cctx=item->ctx;
     pthread_cond_signal(&run_cond_b);
     pthread_mutex_unlock(&run_lock_b);
-
     // Extract Data and send
     if (item == NULL)
     {
       continue;
     }
-    int openfile = content_get(item->path); //the server is keeping all the files descriptors open in a dictionary
+    //the server is keeping all the files descriptors open in a dictionary
+    int openfile = content_get(item->path);
     if (openfile < 0)
     {
       gfs_sendheader(&item->ctx, GF_FILE_NOT_FOUND, 0);
       continue;
     }
-
     // Check for path
-
-    // printf("Sending header\n");
-    /* Sending the file contents chunk by chunk. */
-
     /* Get file stats */
     struct stat file_stat;
     if (fstat(openfile, &file_stat) < 0)
@@ -103,14 +108,12 @@ void *worker(void *arguments)
     /*Update the variable*/
     int file_size = 0;
     file_size = file_stat.st_size;
-    // printf("File length is %d\n",file_size);
-
+    // Send Header
     gfs_sendheader(&item->ctx, GF_OK, file_size);
-
     int bytesRead = 0;
     int bytesSent = 0;
     int total_sent = 0;
-
+    // Send Data
     while (total_sent < file_size)
     {
       bytesRead = pread(openfile, buffer, 1024, total_sent);
@@ -118,10 +121,8 @@ void *worker(void *arguments)
       total_sent = total_sent + bytesSent;
       memset(buffer, '\0', 1024);
     }
-    
+    // Free memory
     free(item);
-
-    // printf("Bytes Transferred = %d\n", total_sent);
   }
 }
 
@@ -200,11 +201,9 @@ int main(int argc, char **argv)
   content_init(content_map);
 
   /* Initialize thread management */
-
   list = (steque_t *)malloc(sizeof(steque_t));
   steque_init(list);
-
-  // printf("Number of threads is %d\n",nthreads);
+  // Initialize Threads
   init_threads(nthreads);
 
   /*Initializing server*/
